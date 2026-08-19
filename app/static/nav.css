@@ -1,0 +1,4 @@
+header nav { display: flex; gap: 14px; margin-left: auto; }
+header nav a { color: var(--muted); text-decoration: none; }
+header nav a:hover { color: var(--text); }
+@media (max-width: 600px) { header .tag { display: none; } header nav { gap: 8px; font-size: 14px; } }

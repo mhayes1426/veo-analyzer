@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Training & GPU · Veo Analyzer{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/training.css">{% endblock %}
+{% block content %}
+<section class="hero"><div><h1>Training readiness</h1><p>Privacy-safe dataset checks and local GPU diagnostics.</p></div><a class="button primary" href="/api/training/export/yolo">Export YOLO dataset</a></section>
+<section class="metric-grid">
+  <article><strong>{{ report.exportable }}</strong><span>Exportable frames</span></article>
+  <article><strong>{{ report.pending }}</strong><span>Pending</span></article>
+  <article><strong>{{ report.skipped }}</strong><span>Skipped</span></article>
+  <article><strong>{{ report.warnings|length }}</strong><span>Quality warnings</span></article>
+</section>
+<div class="training-grid">
+  <section class="panel"><h2>Annotation quality</h2><p>Made {{ report.outcomes.get('made', 0) }} · Missed {{ report.outcomes.get('missed', 0) }} · Uncertain {{ report.outcomes.get('uncertain', 0) }}</p>
+  <div class="warnings">{% for warning in report.warnings %}<div class="warning"><strong>{{ warning.code|replace('_',' ') }}</strong><span>{{ warning.message }}</span></div>{% else %}<p class="good">No current quality warnings.</p>{% endfor %}</div></section>
+  <section class="panel"><h2>NVIDIA diagnostics</h2>
+    <dl><dt>NVIDIA runtime</dt><dd class="{{ 'good' if gpu.nvidia_runtime else 'bad' }}">{{ 'Detected' if gpu.nvidia_runtime else 'Not detected' }}</dd><dt>PyTorch</dt><dd>{{ gpu.pytorch_version if gpu.pytorch_installed else 'Not installed in this image' }}</dd><dt>CUDA through PyTorch</dt><dd class="{{ 'good' if gpu.cuda_available else 'bad' }}">{{ 'Available' if gpu.cuda_available else 'Unavailable' }}</dd></dl>
+    {% for device in gpu.gpus %}<div class="gpu-card"><strong>{{ device.name }}</strong><span>Driver {{ device.driver }}</span><span>{{ device.memory_used_mib }} / {{ device.memory_total_mib }} MiB VRAM</span><span>{{ device.utilization_percent }}% utilization · {{ device.temperature_c }}°C</span></div>{% else %}<p class="hint">Use the GPU image on Unraid with the NVIDIA runtime enabled.</p>{% endfor %}
+  </section>
+</div>
+<p class="privacy-note">Exports contain opaque IDs, normalized boxes, frame timestamps, and media fingerprints. Recording titles and filesystem paths are excluded.</p>
+{% endblock %}

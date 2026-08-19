@@ -5,6 +5,7 @@ import json
 import logging
 import subprocess
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from .annotations import FRAME_OFFSETS, annotation_frame_path, detailed_frame_ti
 from .catalog import scan_media
 from .config import Settings
 from .db import Database
+from .dataset import quality_report, recording_split, yolo_label
+from .gpu import gpu_diagnostics
 from .media import resolve_known_media, stream_media
 from .thumbnails import generate_thumbnail, thumbnail_path
 
@@ -135,11 +138,87 @@ def ensure_annotation_frames(event_id: str):
         ).fetchall()
 
 
+def dataset_frames() -> list[dict]:
+    with db.connect() as connection:
+        frames = connection.execute(
+            """SELECT f.*, e.sequence_outcome, e.event_type, e.event_time_seconds,
+                      r.recording_id, r.media_path, r.size_bytes, r.mtime_ns, r.availability
+               FROM annotation_frames f JOIN events e ON e.event_id=f.event_id
+               JOIN recordings r ON r.recording_id=e.recording_id
+               ORDER BY r.recording_id, f.event_id, f.frame_time_seconds"""
+        ).fetchall()
+        boxes = connection.execute(
+            "SELECT * FROM annotation_boxes ORDER BY frame_id, created_at"
+        ).fetchall()
+    boxes_by_frame: dict[str, list[dict]] = {}
+    for box in boxes:
+        boxes_by_frame.setdefault(box["frame_id"], []).append(dict(box))
+    return [dict(row) | {"boxes": boxes_by_frame.get(row["frame_id"], [])} for row in frames]
+
+
 @app.get("/health")
 def health():
     with db.connect() as connection:
         connection.execute("SELECT 1").fetchone()
     return {"status": "ok", "version": __version__}
+
+
+@app.get("/training", response_class=HTMLResponse)
+def training_page(request: Request):
+    report = quality_report(dataset_frames())
+    diagnostics = gpu_diagnostics()
+    return templates.TemplateResponse(request, "training.html", {"report": report, "gpu": diagnostics})
+
+
+@app.get("/api/system/gpu")
+def gpu_status():
+    return gpu_diagnostics()
+
+
+@app.get("/api/training/quality")
+def training_quality():
+    return quality_report(dataset_frames())
+
+
+@app.get("/api/training/export/yolo")
+def export_yolo_dataset():
+    frames = dataset_frames()
+    reviewed = [row for row in frames if row["review_status"] == "reviewed" and row["availability"] == "present"]
+    if not reviewed:
+        raise HTTPException(409, "No reviewed annotation frames are available")
+    export_dir = settings.export_root / "datasets"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    output = export_dir / "veo-yolo-dataset.zip"
+    temporary = output.with_suffix(".zip.tmp")
+    manifest = {"schema_version": 1, "classes": ["basketball", "hoop"], "frames": []}
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("data.yaml", "path: .\ntrain: images/train\nval: images/val\ntest: images/test\nnames:\n  0: basketball\n  1: hoop\n")
+        for row in reviewed:
+            source = resolve_known_media(settings.media_root, row["media_path"])
+            stat = source.stat()
+            if stat.st_size != row["size_bytes"] or stat.st_mtime_ns != row["mtime_ns"]:
+                continue
+            image_path = annotation_frame_path(settings.config_root, row["event_id"], row["frame_index"])
+            try:
+                extract_annotation_frame(source, image_path, row["frame_time_seconds"])
+            except (OSError, subprocess.SubprocessError):
+                logger.exception("Dataset frame extraction failed for %s", row["frame_id"])
+                continue
+            split = recording_split(row["recording_id"])
+            stem = row["frame_id"]
+            archive.write(image_path, f"images/{split}/{stem}.jpg")
+            labels = "\n".join(yolo_label(box) for box in row["boxes"])
+            archive.writestr(f"labels/{split}/{stem}.txt", labels + ("\n" if labels else ""))
+            manifest["frames"].append({
+                "frame_id": row["frame_id"], "recording_id": row["recording_id"], "event_id": row["event_id"],
+                "frame_time_seconds": row["frame_time_seconds"], "split": split,
+                "sequence_outcome": row["sequence_outcome"], "box_count": len(row["boxes"]),
+                "source_fingerprint": {"size_bytes": row["size_bytes"], "mtime_ns": row["mtime_ns"]},
+            })
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
+        archive.writestr("quality-report.json", json.dumps(quality_report(frames), indent=2) + "\n")
+    temporary.replace(output)
+    return FileResponse(output, filename="veo-yolo-dataset.zip", media_type="application/zip")
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -47,4 +47,20 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
+      - uses: docker/metadata-action@v5
+        id: gpu-meta
+        with:
+          images: ghcr.io/mhayes1426/veo-analyzer
+          tags: |
+            type=ref,event=tag,suffix=-gpu
+            type=raw,value=latest-gpu,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.gpu
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.gpu-meta.outputs.tags }}
+          labels: ${{ steps.gpu-meta.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha,scope=gpu
+          cache-to: type=gha,mode=max,scope=gpu
