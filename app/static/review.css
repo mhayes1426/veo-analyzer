@@ -1,1 +1,1 @@
-.chapter.candidate{border-color:#d6a84b}.chapter.rejected{opacity:.62}.chapter-actions [data-approve]{color:var(--accent)}.chapter-actions [data-reject]{color:var(--danger)}
+.chapter.candidate{border-color:#d6a84b}.chapter.rejected{opacity:.62}.chapter-actions [data-approve]{border-color:var(--accent);color:var(--accent)}.chapter-actions [data-reject]{border-color:var(--danger);color:var(--danger)}

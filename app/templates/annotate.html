@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Annotate · {{ recording.title }}{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="/static/annotate.css"><link rel="stylesheet" href="/static/annotate-controls.css"><link rel="stylesheet" href="/static/annotate-detail.css"><link rel="stylesheet" href="/static/annotate-modal.css">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/annotate.css"><link rel="stylesheet" href="/static/annotate-controls.css"><link rel="stylesheet" href="/static/annotate-detail.css">{% endblock %}
 {% block content %}
 <a class="back" href="/recordings/{{ recording.recording_id }}">← Back to game</a>
 <section class="annotation-head">
-  <div><h1>Annotate made basket</h1><p>{{ recording.title }} · event at {{ '%.2f'|format(event.event_time_seconds) }} seconds</p></div>
+  <div><h1>Annotate {{ event.event_type|replace('_', ' ') }}</h1><p>{{ recording.title }} · event at {{ '%.2f'|format(event.event_time_seconds) }} seconds</p></div>
   <div class="annotation-actions">
     <label class="outcome-field"><span class="outcome-label"><span>Sequence outcome</span><span id="save-state">Saved</span></span><select id="sequence-outcome"><option value="made" {% if event.sequence_outcome == 'made' %}selected{% endif %}>Made</option><option value="missed" {% if event.sequence_outcome == 'missed' %}selected{% endif %}>Missed</option><option value="uncertain" {% if event.sequence_outcome == 'uncertain' %}selected{% endif %}>Uncertain</option></select></label>
     <a class="button secondary export-annotations" href="/api/events/{{ event.event_id }}/annotations/export">Export annotations</a>
@@ -76,9 +76,11 @@
       </ul>
       <h3>Sequence outcome</h3>
       <ul>
+        <li>Use <strong>Basket attempt</strong> events for both made and missed training examples.</li>
         <li><strong>Made:</strong> the ball completes its passage through the rim.</li>
         <li><strong>Missed:</strong> a shot approaches the scoring area but does not pass through.</li>
         <li><strong>Uncertain:</strong> the outcome cannot be verified confidently.</li>
+        <li>The game list displays a reviewed basket attempt as Made basket or Missed basket.</li>
       </ul>
       <h3>Detailed frames</h3>
       <ul>
@@ -91,14 +93,5 @@
     <div id="guide-backdrop" class="guide-backdrop"></div>
   </aside>
 </div>
-<dialog id="annotation-dialog" class="annotation-dialog">
-  <div class="modal-mark" aria-hidden="true">▣</div>
-  <h2 id="annotation-dialog-title">Confirm action</h2>
-  <p id="annotation-dialog-message"></p>
-  <div class="dialog-actions">
-    <button id="annotation-dialog-cancel">Cancel</button>
-    <button id="annotation-dialog-confirm" class="primary">Continue</button>
-  </div>
-</dialog>
 {% endblock %}
 {% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},recordingId:{{ recording.recording_id|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}

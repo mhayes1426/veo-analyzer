@@ -80,6 +80,7 @@ class EventInput(BaseModel):
     play_from_seconds: float = Field(ge=0)
     play_until_seconds: float = Field(ge=0)
     review_status: str = Field(default="approved", pattern=r"^(candidate|approved|rejected)$")
+    sequence_outcome: str | None = Field(default=None, pattern=r"^(made|missed|uncertain)$")
 
     @model_validator(mode="after")
     def valid_window(self):
@@ -531,7 +532,8 @@ def export_yolo_dataset():
             manifest["frames"].append({
                 "frame_id": row["frame_id"], "recording_id": row["recording_id"], "event_id": row["event_id"],
                 "frame_time_seconds": row["frame_time_seconds"], "split": split,
-                "sequence_outcome": row["sequence_outcome"], "box_count": len(row["boxes"]),
+                "event_type": row["event_type"], "sequence_outcome": row["sequence_outcome"],
+                "box_count": len(row["boxes"]),
                 "source_fingerprint": {"size_bytes": row["size_bytes"], "mtime_ns": row["mtime_ns"]},
             })
         archive.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
@@ -842,15 +844,15 @@ def create_event(recording_id: str, event: EventInput):
     if duration is not None and event.play_until_seconds > duration + 0.01:
         raise HTTPException(422, "Playback window exceeds recording duration")
     event_id = str(uuid.uuid4())
-    reviewed_at = "CURRENT_TIMESTAMP" if event.review_status != "candidate" else "NULL"
+    sequence_outcome = event.sequence_outcome or ("made" if event.event_type == "made_basket" else "uncertain")
     with db.transaction() as connection:
         connection.execute(
-            f"""INSERT INTO events
+            """INSERT INTO events
                 (event_id, recording_id, event_type, event_time_seconds, play_from_seconds,
-                 play_until_seconds, review_status, source, reviewed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', {reviewed_at})""",
+                 play_until_seconds, review_status, source, reviewed_at, sequence_outcome)
+                VALUES (?, ?, ?, ?, ?, ?, 'approved', 'manual', CURRENT_TIMESTAMP, ?)""",
             (event_id, recording_id, event.event_type, event.event_time_seconds,
-             event.play_from_seconds, event.play_until_seconds, event.review_status),
+             event.play_from_seconds, event.play_until_seconds, sequence_outcome),
         )
     return row_dict(get_event(event_id))
 
@@ -868,14 +870,17 @@ def update_event(event_id: str, event: EventInput):
         or abs(event.play_until_seconds - existing["play_until_seconds"]) > .001
     )
     source = "corrected" if existing["source"] == "model" and content_changed else existing["source"]
+    sequence_outcome = event.sequence_outcome or existing["sequence_outcome"]
+    review_status = "approved" if existing["source"] == "manual" else event.review_status
     with db.transaction() as connection:
         connection.execute(
             """UPDATE events SET event_type=?, event_time_seconds=?, play_from_seconds=?,
-               play_until_seconds=?, review_status=?, source=?, updated_at=CURRENT_TIMESTAMP,
+               play_until_seconds=?, review_status=?, source=?, sequence_outcome=?, updated_at=CURRENT_TIMESTAMP,
                reviewed_at=CASE WHEN ?='candidate' THEN NULL ELSE CURRENT_TIMESTAMP END
                WHERE event_id=?""",
             (event.event_type, event.event_time_seconds, event.play_from_seconds,
-             event.play_until_seconds, event.review_status, source, event.review_status, event_id),
+             event.play_until_seconds, review_status, source, sequence_outcome,
+             review_status, event_id),
         )
     return row_dict(get_event(event_id))
 
@@ -887,6 +892,17 @@ def delete_event(event_id: str):
         raise HTTPException(409, "Model events must be rejected, not deleted")
     with db.transaction() as connection:
         connection.execute("DELETE FROM events WHERE event_id=?", (event_id,))
+
+
+@app.delete("/api/recordings/{recording_id}/events")
+def delete_recording_events(recording_id: str):
+    get_recording(recording_id)
+    with db.transaction() as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM events WHERE recording_id=?", (recording_id,)
+        ).fetchone()[0]
+        connection.execute("DELETE FROM events WHERE recording_id=?", (recording_id,))
+    return {"recording_id": recording_id, "deleted_count": count}
 
 
 @app.get("/api/recordings/{recording_id}/export/json")

@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="/static/veo-analyzer-icon.png">
   <title>{% block title %}Veo Analyzer{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/modal.css">
   <link rel="stylesheet" href="/static/nav.css">
   {% block head_extra %}{% endblock %}
 </head>
@@ -15,6 +16,16 @@
   <header><a href="/" class="brand">Veo Analyzer</a><span class="tag">Local basketball chapters</span><nav><a href="/">Games</a><a href="/analyze">Analyze</a><a href="/training">Training &amp; GPU</a></nav></header>
   <main>{% block content %}{% endblock %}</main>
   <footer>Veo Analyzer · Originals remain read-only</footer>
+  <dialog id="app-dialog" class="app-dialog">
+    <div class="modal-mark" aria-hidden="true">▣</div>
+    <h2 id="app-dialog-title">Confirm action</h2>
+    <p id="app-dialog-message"></p>
+    <div class="dialog-actions">
+      <button id="app-dialog-cancel" type="button">Cancel</button>
+      <button id="app-dialog-confirm" type="button" class="primary">Continue</button>
+    </div>
+  </dialog>
+  <script src="/static/modal.js"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

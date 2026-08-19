@@ -1,8 +1,6 @@
 const cfg=window.ANNOTATION,stage=document.querySelector('#annotation-stage'),image=document.querySelector('#frame-image'),layer=document.querySelector('#box-layer');
 let frameIndex=0,activeClass='basketball',showAllClasses=false,selectedIndex=null,drawing=null,moving=null,resizing=null,dirty=false;
-const actionDialog=document.querySelector('#annotation-dialog'),dialogTitle=document.querySelector('#annotation-dialog-title'),dialogMessage=document.querySelector('#annotation-dialog-message'),dialogCancel=document.querySelector('#annotation-dialog-cancel'),dialogConfirm=document.querySelector('#annotation-dialog-confirm');
-function showDialog({title,message,confirmLabel='Continue',cancelLabel='Cancel',danger=false,notice=false}){return new Promise(resolve=>{dialogTitle.textContent=title;dialogMessage.textContent=message;dialogConfirm.textContent=confirmLabel;dialogCancel.textContent=cancelLabel;dialogCancel.hidden=notice;dialogConfirm.classList.toggle('danger-confirm',danger);const finish=result=>{dialogConfirm.onclick=null;dialogCancel.onclick=null;actionDialog.oncancel=null;actionDialog.close();resolve(result)};dialogConfirm.onclick=()=>finish(true);dialogCancel.onclick=()=>finish(false);actionDialog.oncancel=event=>{event.preventDefault();finish(false)};actionDialog.showModal();dialogConfirm.focus()})}
-const showNotice=(message,title='Veo Analyzer')=>showDialog({title,message,confirmLabel:'OK',notice:true});
+const actionDialog=document.querySelector('#app-dialog'),showDialog=window.showAppDialog,showNotice=window.showAppNotice;
 const frame=()=>cfg.frames[frameIndex];
 const defaultSizes={basketball:{width:.03,height:.04},hoop:{width:.045,height:.025}};
 const sizePresets={basketball:{...defaultSizes.basketball,...cfg.sizePresets?.basketball},hoop:{...defaultSizes.hoop,...cfg.sizePresets?.hoop}};
