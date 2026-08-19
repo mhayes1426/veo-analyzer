@@ -1,0 +1,17 @@
+services:
+  veo-analyzer:
+    build: .
+    image: veo-analyzer:local
+    ports:
+      - "8090:8080"
+    environment:
+      MEDIA_ROOT: /data
+      CONFIG_ROOT: /config
+      EXPORT_ROOT: /exports
+      STABLE_AGE_SECONDS: "0"
+    volumes:
+      - ./sample-media:/data:ro
+      - ./local-data/config:/config:rw
+      - ./local-data/exports:/exports:rw
+    restart: unless-stopped
+

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div><h1>Game library</h1><p>Games discovered from your read-only media share.</p></div>
+  <button id="scan">Scan now</button>
+</section>
+<input id="search" class="search" placeholder="Search games…" aria-label="Search games">
+<section class="grid" id="games">
+{% for game in recordings %}
+  <a class="card" href="/recordings/{{ game.recording_id }}" data-title="{{ game.title|lower }}">
+    <span class="status {{ game.availability }}">{{ game.availability }}</span>
+    <h2>{{ game.title }}</h2>
+    <p>{{ ((game.duration_seconds or 0) / 60)|round|int }} min · {{ game.event_count }} highlights</p>
+  </a>
+{% else %}
+  <div class="empty"><h2>No games found yet</h2><p>Check the media mapping, then select Scan now.</p></div>
+{% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const search = document.querySelector('#search');
+search.addEventListener('input', () => document.querySelectorAll('.card').forEach(card => {
+  card.hidden = !card.dataset.title.includes(search.value.toLowerCase());
+}));
+document.querySelector('#scan').addEventListener('click', async event => {
+  event.currentTarget.disabled = true; event.currentTarget.textContent = 'Scanning…';
+  await fetch('/api/scan', {method:'POST'}); location.reload();
+});
+</script>
+{% endblock %}
+
