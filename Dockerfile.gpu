@@ -10,8 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg curl gosu passwd \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 1000 analyzer \
-    && useradd --uid 1000 --gid analyzer --create-home analyzer
+    && groupadd --non-unique --gid 1000 analyzer \
+    && useradd --non-unique --uid 1000 --gid analyzer --create-home analyzer
 
 WORKDIR /opt/veo-analyzer
 COPY pyproject.toml ./
