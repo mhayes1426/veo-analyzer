@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block head_extra %}<link rel="stylesheet" href="/static/library.css">{% endblock %}
 {% block content %}
 <section class="hero">
   <div><h1>Game library</h1><p>Games discovered from your read-only media share.</p></div>
@@ -8,6 +9,7 @@
 <section class="grid" id="games">
 {% for game in recordings %}
   <a class="card" href="/recordings/{{ game.recording_id }}" data-title="{{ game.title|lower }}">
+    <div class="thumbnail"><img src="/api/recordings/{{ game.recording_id }}/thumbnail" alt="" loading="lazy"></div>
     <span class="status {{ game.availability }}">{{ game.availability }}</span>
     <h2>{{ game.title }}</h2>
     <p>{{ ((game.duration_seconds or 0) / 60)|round|int }} min · {{ game.event_count }} highlights</p>
@@ -29,4 +31,3 @@ document.querySelector('#scan').addEventListener('click', async event => {
 });
 </script>
 {% endblock %}
-

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import subprocess
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,7 @@ from .catalog import scan_media
 from .config import Settings
 from .db import Database
 from .media import resolve_known_media, stream_media
+from .thumbnails import generate_thumbnail, thumbnail_path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("veo-analyzer")
@@ -140,6 +142,29 @@ def media(request: Request, recording_id: str):
     return stream_media(request, path)
 
 
+@app.get("/api/recordings/{recording_id}/thumbnail")
+def thumbnail(recording_id: str):
+    recording = get_recording(recording_id)
+    if recording["availability"] != "present":
+        raise HTTPException(404, "Recording is unavailable")
+    source = resolve_known_media(settings.media_root, recording["media_path"])
+    stat = source.stat()
+    if stat.st_size != recording["size_bytes"] or stat.st_mtime_ns != recording["mtime_ns"]:
+        raise HTTPException(409, "Recording changed; run a new scan")
+    output = thumbnail_path(
+        settings.config_root,
+        recording_id,
+        recording["size_bytes"],
+        recording["mtime_ns"],
+    )
+    try:
+        generate_thumbnail(source, output, recording["duration_seconds"])
+    except (OSError, subprocess.SubprocessError):
+        logger.exception("Thumbnail generation failed for recording %s", recording_id)
+        raise HTTPException(503, "Thumbnail generation failed") from None
+    return FileResponse(output, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.get("/api/recordings/{recording_id}/events")
 def list_events(recording_id: str):
     get_recording(recording_id)
@@ -222,4 +247,3 @@ def export_json(recording_id: str):
     temporary.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     temporary.replace(output)
     return FileResponse(output, filename=f"{recording_id}-chapters.json", media_type="application/json")
-
