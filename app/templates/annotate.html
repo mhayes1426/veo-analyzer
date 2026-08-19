@@ -5,7 +5,10 @@
 <a class="back" href="/recordings/{{ recording.recording_id }}">← Back to game</a>
 <section class="annotation-head">
   <div><h1>Annotate made basket</h1><p>{{ recording.title }} · event at {{ '%.2f'|format(event.event_time_seconds) }} seconds</p></div>
-  <div class="annotation-actions"><label class="outcome-field">Sequence outcome<select id="sequence-outcome"><option value="made" {% if event.sequence_outcome == 'made' %}selected{% endif %}>Made</option><option value="missed" {% if event.sequence_outcome == 'missed' %}selected{% endif %}>Missed</option><option value="uncertain" {% if event.sequence_outcome == 'uncertain' %}selected{% endif %}>Uncertain</option></select></label><span id="save-state">Saved</span><a class="button secondary" href="/api/events/{{ event.event_id }}/annotations/export">Export annotations</a></div>
+  <div class="annotation-actions">
+    <label class="outcome-field"><span class="outcome-label"><span>Sequence outcome</span><span id="save-state">Saved</span></span><select id="sequence-outcome"><option value="made" {% if event.sequence_outcome == 'made' %}selected{% endif %}>Made</option><option value="missed" {% if event.sequence_outcome == 'missed' %}selected{% endif %}>Missed</option><option value="uncertain" {% if event.sequence_outcome == 'uncertain' %}selected{% endif %}>Uncertain</option></select></label>
+    <a class="button secondary export-annotations" href="/api/events/{{ event.event_id }}/annotations/export">Export annotations</a>
+  </div>
 </section>
 <div class="annotation-layout">
   <section>
