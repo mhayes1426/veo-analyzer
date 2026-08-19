@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Training & GPU · Veo Analyzer{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="/static/training.css">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/training.css"><link rel="stylesheet" href="/static/training-jobs.css">{% endblock %}
 {% block content %}
 <section class="hero"><div><h1>Training readiness</h1><p>Privacy-safe dataset checks and local GPU diagnostics.</p></div><a class="button primary" href="/api/training/export/yolo">Export YOLO dataset</a></section>
 <section class="metric-grid">
@@ -17,5 +17,30 @@
     {% for device in gpu.gpus %}<div class="gpu-card"><strong>{{ device.name }}</strong><span>Driver {{ device.driver }}</span><span>{{ device.memory_used_mib }} / {{ device.memory_total_mib }} MiB VRAM</span><span>{{ device.utilization_percent }}% utilization · {{ device.temperature_c }}°C</span></div>{% else %}<p class="hint">Use the GPU image on Unraid with the NVIDIA runtime enabled.</p>{% endfor %}
   </section>
 </div>
+<section class="panel training-jobs">
+  <div class="job-heading"><div><h2>Training jobs</h2><p class="hint">Train a basketball and hoop detector from reviewed frames. One job can run at a time.</p></div></div>
+  <form id="training-form" class="training-form">
+    <label>Model<select id="train-model"><option value="yolo11n.pt">YOLO11 Nano · fastest</option><option value="yolo11s.pt">YOLO11 Small · balanced</option><option value="yolo11m.pt">YOLO11 Medium · most VRAM</option></select></label>
+    <label>Epochs<input id="train-epochs" type="number" min="1" max="500" value="50" required></label>
+    <label>Image size<input id="train-image-size" type="number" min="320" max="1280" step="32" value="640" required></label>
+    <label>Batch size<input id="train-batch-size" type="number" min="-1" max="128" value="8" required></label>
+    <button class="primary" type="submit" {% if not training_available or not gpu.cuda_available %}disabled{% endif %}>Start training</button>
+  </form>
+  {% if not training_available %}<p class="bad">Training tools are not installed in this container. Use the NVIDIA GPU image.</p>{% elif not gpu.cuda_available %}<p class="bad">CUDA must be available before training can start.</p>{% endif %}
+  <p id="training-message" class="hint">Current split: {{ split_counts.train }} training · {{ split_counts.val }} validation · {{ split_counts.test }} test frames. Training requires reviewed frames in both training and validation.</p>
+  <div id="training-job-list" class="job-list">
+    {% for job in jobs %}
+    <article class="job-card" data-job-id="{{ job.job_id }}" data-status="{{ job.status }}">
+      <div><strong>{{ job.model_name }} · {{ job.epochs }} epochs</strong><span>{{ job.frame_count }} frames · {{ job.image_size }}px · batch {{ job.batch_size }}</span></div>
+      <div class="job-progress"><span>{{ job.status|capitalize }} · epoch {{ job.current_epoch }}/{{ job.epochs }}</span><progress max="100" value="{{ job.progress_percent }}"></progress></div>
+      <div class="job-actions">{% if job.model_available %}<a class="button" href="/api/training/jobs/{{ job.job_id }}/model">Download model</a>{% endif %}<button type="button" data-log>View log</button></div>
+      {% if job.error_message %}<p class="bad job-error">{{ job.error_message }}</p>{% endif %}
+      {% if job.metrics %}<p class="job-metrics">{% for name, value in job.metrics.items() %}{{ name }} {{ '%.4f'|format(value) }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    </article>
+    {% else %}<p class="hint">No training jobs yet.</p>{% endfor %}
+  </div>
+</section>
 <p class="privacy-note">Exports contain opaque IDs, normalized boxes, frame timestamps, and media fingerprints. Recording titles and filesystem paths are excluded.</p>
+<dialog id="training-log-dialog"><h2>Training log</h2><pre id="training-log"></pre><div class="dialog-actions"><button id="close-training-log">Close</button></div></dialog>
 {% endblock %}
+{% block scripts %}<script src="/static/training.js"></script>{% endblock %}

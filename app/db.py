@@ -80,6 +80,30 @@ CREATE TABLE IF NOT EXISTS annotation_size_presets (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (recording_id, object_class)
 );
+
+CREATE TABLE IF NOT EXISTS training_jobs (
+    job_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK(status IN ('queued','preparing','running','completed','failed')),
+    model_name TEXT NOT NULL,
+    epochs INTEGER NOT NULL CHECK(epochs >= 1),
+    image_size INTEGER NOT NULL CHECK(image_size >= 320),
+    batch_size INTEGER NOT NULL,
+    device TEXT NOT NULL,
+    progress_percent REAL NOT NULL DEFAULT 0 CHECK(progress_percent >= 0 AND progress_percent <= 100),
+    current_epoch INTEGER NOT NULL DEFAULT 0,
+    frame_count INTEGER NOT NULL DEFAULT 0,
+    output_dir TEXT NOT NULL,
+    model_path TEXT,
+    metrics_json TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TEXT,
+    completed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_jobs_created
+ON training_jobs(created_at DESC);
 """
 
 

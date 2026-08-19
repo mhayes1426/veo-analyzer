@@ -1,0 +1,95 @@
+.training-jobs {
+  margin-top: 18px;
+}
+
+.training-form {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(3, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.training-form button {
+  min-height: 42px;
+}
+
+.training-form button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.job-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg);
+}
+
+.job-card > div:first-child,
+.job-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.job-card span,
+.job-metrics {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.job-progress progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.job-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.job-error,
+.job-metrics {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+#training-log-dialog {
+  width: min(900px, 94vw);
+}
+
+#training-log {
+  max-height: 65vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #050814;
+  color: #dce5fa;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 950px) {
+  .training-form,
+  .job-card {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .training-form button,
+  .job-actions {
+    grid-column: 1 / -1;
+  }
+}

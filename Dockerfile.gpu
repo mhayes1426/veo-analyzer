@@ -1,11 +1,12 @@
 FROM pytorch/pytorch:2.13.0-cuda13.0-cudnn9-runtime
 
-ARG APP_VERSION=0.5.0
+ARG APP_VERSION=0.6.0
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     APP_VERSION=${APP_VERSION} \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,video \
+    YOLO_CONFIG_DIR=/config/ultralytics
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg curl gosu passwd \
@@ -16,7 +17,10 @@ RUN apt-get update \
 WORKDIR /opt/veo-analyzer
 COPY pyproject.toml ./
 COPY app ./app
-RUN python -m pip install --break-system-packages .
+RUN python -m pip install --break-system-packages '.[training]'
+
+RUN mkdir -p /opt/models \
+    && python -c "from pathlib import Path; from ultralytics import YOLO; [Path(name).replace(Path('/opt/models') / name) for name in ('yolo11n.pt','yolo11s.pt','yolo11m.pt') if not (YOLO(name) is None)]"
 
 RUN mkdir -p /config /exports \
     && chown -R analyzer:analyzer /opt/veo-analyzer /config /exports

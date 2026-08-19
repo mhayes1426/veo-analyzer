@@ -9,7 +9,7 @@ def test_schema_initializes(roots):
     db.initialize()
     with db.connect() as connection:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"recordings", "events", "annotation_frames", "annotation_boxes", "annotation_size_presets"} <= tables
+    assert {"recordings", "events", "annotation_frames", "annotation_boxes", "annotation_size_presets", "training_jobs"} <= tables
     with db.connect() as connection:
         event_columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
         frame_columns = {row[1] for row in connection.execute("PRAGMA table_info(annotation_frames)")}
@@ -69,4 +69,27 @@ def test_annotation_size_presets_are_per_recording_and_class(roots):
             connection.execute(
                 "INSERT INTO annotation_size_presets (recording_id,object_class,width,height) VALUES (?,?,?,?)",
                 (recording_id, "player", .1, .1),
+            )
+
+
+def test_training_job_constraints(roots):
+    import sqlite3
+    import uuid
+
+    _, config, _ = roots
+    db = Database(config / "analyzer.db")
+    db.initialize()
+    with db.transaction() as connection:
+        connection.execute(
+            """INSERT INTO training_jobs
+               (job_id,status,model_name,epochs,image_size,batch_size,device,output_dir)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (str(uuid.uuid4()), "queued", "yolo11n.pt", 50, 640, 8, "0", str(config / "training")),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """INSERT INTO training_jobs
+                   (job_id,status,model_name,epochs,image_size,batch_size,device,output_dir)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                (str(uuid.uuid4()), "unknown", "yolo11n.pt", 50, 640, 8, "0", str(config / "bad")),
             )

@@ -24,6 +24,7 @@ from .dataset import quality_report, recording_split, yolo_label
 from .gpu import gpu_diagnostics
 from .media import resolve_known_media, stream_media
 from .thumbnails import generate_thumbnail, thumbnail_path
+from .training_jobs import ALLOWED_MODELS, launch_training, training_runtime_available
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("veo-analyzer")
@@ -52,6 +53,12 @@ async def catalog_loop() -> None:
 async def lifespan(_: FastAPI):
     settings.validate()
     db.initialize()
+    with db.transaction() as connection:
+        connection.execute(
+            """UPDATE training_jobs SET status='failed', error_message='Analyzer restarted during training',
+               completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+               WHERE status IN ('queued','preparing','running')"""
+        )
     task = asyncio.create_task(catalog_loop())
     yield
     task.cancel()
@@ -109,6 +116,32 @@ class AnnotationSizeInput(BaseModel):
     object_class: str = Field(pattern=r"^(basketball|hoop)$")
     width: float = Field(gt=0, le=1)
     height: float = Field(gt=0, le=1)
+
+
+class TrainingJobInput(BaseModel):
+    model_name: str = Field(default="yolo11n.pt", pattern=r"^yolo11(n|s|m)\.pt$")
+    epochs: int = Field(default=50, ge=1, le=500)
+    image_size: int = Field(default=640, ge=320, le=1280, multiple_of=32)
+    batch_size: int = Field(default=8, ge=-1, le=128)
+
+    @model_validator(mode="after")
+    def valid_training_options(self):
+        if self.model_name not in ALLOWED_MODELS:
+            raise ValueError("Unsupported model")
+        if self.batch_size == 0:
+            raise ValueError("Batch size cannot be zero")
+        return self
+
+
+def training_job_dict(row) -> dict:
+    result = {key: row[key] for key in (
+        "job_id", "status", "model_name", "epochs", "image_size", "batch_size", "device",
+        "progress_percent", "current_epoch", "frame_count", "error_message", "created_at",
+        "started_at", "completed_at", "updated_at",
+    )}
+    result["metrics"] = json.loads(row["metrics_json"] or "{}")
+    result["model_available"] = bool(row["model_path"] and Path(row["model_path"]).is_file())
+    return result
 
 
 def get_recording(recording_id: str):
@@ -171,9 +204,22 @@ def health():
 
 @app.get("/training", response_class=HTMLResponse)
 def training_page(request: Request):
-    report = quality_report(dataset_frames())
+    frames = dataset_frames()
+    report = quality_report(frames)
     diagnostics = gpu_diagnostics()
-    return templates.TemplateResponse(request, "training.html", {"report": report, "gpu": diagnostics})
+    split_counts = {"train": 0, "val": 0, "test": 0}
+    for row in frames:
+        if row["review_status"] == "reviewed" and row["availability"] == "present":
+            split_counts[recording_split(row["recording_id"])] += 1
+    with db.connect() as connection:
+        jobs = connection.execute("SELECT * FROM training_jobs ORDER BY created_at DESC LIMIT 20").fetchall()
+    return templates.TemplateResponse(request, "training.html", {
+        "report": report,
+        "gpu": diagnostics,
+        "jobs": [training_job_dict(row) for row in jobs],
+        "training_available": training_runtime_available(),
+        "split_counts": split_counts,
+    })
 
 
 @app.get("/api/system/gpu")
@@ -184,6 +230,85 @@ def gpu_status():
 @app.get("/api/training/quality")
 def training_quality():
     return quality_report(dataset_frames())
+
+
+@app.get("/api/training/jobs")
+def list_training_jobs():
+    with db.connect() as connection:
+        rows = connection.execute("SELECT * FROM training_jobs ORDER BY created_at DESC LIMIT 50").fetchall()
+    return {"jobs": [training_job_dict(row) for row in rows], "training_available": training_runtime_available()}
+
+
+@app.post("/api/training/jobs", status_code=202)
+def create_training_job(payload: TrainingJobInput):
+    if not training_runtime_available():
+        raise HTTPException(409, "Training is available only in the NVIDIA GPU image")
+    if not gpu_diagnostics().get("cuda_available"):
+        raise HTTPException(409, "CUDA is not available to PyTorch")
+    split_counts = {"train": 0, "val": 0, "test": 0}
+    for frame in dataset_frames():
+        if frame["review_status"] == "reviewed" and frame["availability"] == "present":
+            split_counts[recording_split(frame["recording_id"])] += 1
+    if split_counts["train"] == 0 or split_counts["val"] == 0:
+        raise HTTPException(409, "Reviewed frames are required in both training and validation splits")
+    with db.transaction() as connection:
+        active = connection.execute(
+            "SELECT job_id FROM training_jobs WHERE status IN ('queued','preparing','running') LIMIT 1"
+        ).fetchone()
+        if active:
+            raise HTTPException(409, "Another training job is already running")
+        job_id = str(uuid.uuid4())
+        output_dir = settings.config_root / "training" / "jobs" / job_id
+        connection.execute(
+            """INSERT INTO training_jobs
+               (job_id,status,model_name,epochs,image_size,batch_size,device,output_dir)
+               VALUES (?, 'queued', ?, ?, ?, ?, '0', ?)""",
+            (job_id, payload.model_name, payload.epochs, payload.image_size, payload.batch_size, str(output_dir)),
+        )
+        row = connection.execute("SELECT * FROM training_jobs WHERE job_id=?", (job_id,)).fetchone()
+    try:
+        launch_training(job_id, settings)
+    except OSError as exc:
+        with db.transaction() as connection:
+            connection.execute(
+                """UPDATE training_jobs SET status='failed', error_message=?, completed_at=CURRENT_TIMESTAMP,
+                   updated_at=CURRENT_TIMESTAMP WHERE job_id=?""",
+                (str(exc)[:1000], job_id),
+            )
+        raise HTTPException(503, "Could not launch training worker") from exc
+    return training_job_dict(row)
+
+
+@app.get("/api/training/jobs/{job_id}")
+def get_training_job(job_id: str):
+    with db.connect() as connection:
+        row = connection.execute("SELECT * FROM training_jobs WHERE job_id=?", (job_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Training job not found")
+    return training_job_dict(row)
+
+
+@app.get("/api/training/jobs/{job_id}/model")
+def download_training_model(job_id: str):
+    with db.connect() as connection:
+        row = connection.execute("SELECT * FROM training_jobs WHERE job_id=?", (job_id,)).fetchone()
+    if not row or not row["model_path"]:
+        raise HTTPException(404, "Trained model not found")
+    root = (settings.config_root / "training" / "jobs" / job_id).resolve()
+    model_path = Path(row["model_path"]).resolve()
+    if not model_path.is_relative_to(root) or not model_path.is_file():
+        raise HTTPException(404, "Trained model not found")
+    return FileResponse(model_path, filename=f"veo-{job_id[:8]}-{row['model_name']}")
+
+
+@app.get("/api/training/jobs/{job_id}/log")
+def training_job_log(job_id: str):
+    with db.connect() as connection:
+        row = connection.execute("SELECT job_id FROM training_jobs WHERE job_id=?", (job_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Training job not found")
+    path = settings.config_root / "training" / "jobs" / job_id / "training.log"
+    return {"log": path.read_text(errors="replace")[-20000:] if path.is_file() else "Training has not produced output yet."}
 
 
 @app.get("/api/training/export/yolo")

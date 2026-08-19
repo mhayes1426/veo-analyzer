@@ -61,6 +61,8 @@ The GPU image still requires the host NVIDIA driver and container runtime. Open 
 
 The YOLO dataset export contains reviewed frame images, normalized basketball/rim labels, opaque recording/event/frame IDs, sequence outcomes, and source fingerprints. It excludes recording titles, media paths, LAN addresses, credentials, and sessions. Dataset splits are assigned by entire recording to prevent frames from the same game appearing across training and evaluation sets.
 
+The NVIDIA image also provides local Training Jobs on the Training & GPU page. A job snapshots reviewed frames into recording-level train/validation/test splits, trains an Ultralytics YOLO11 detector on CUDA, records progress and metrics in Analyzer's SQLite database, and stores versioned model artifacts under `/config/training/jobs`. Training is explicitly started by the user and never modifies source videos.
+
 ## Status
 
 Architecture and milestone plan are defined. Application implementation begins with Phase 0 and Phase 1 in the plan.
