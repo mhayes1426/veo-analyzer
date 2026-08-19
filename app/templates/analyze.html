@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Analyze · Veo Analyzer{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/analyze.css">{% endblock %}
+{% block content %}
+<section class="hero"><div><h1>Game analysis</h1><p>Calibrate the rim-crossing logic, then let a trained model propose made-basket highlights.</p></div><span class="phase-badge">Phase 2 · human reviewed</span></section>
+<section class="panel safety-note"><strong>Model highlights are always candidates.</strong><span>Approve, correct, or reject them in the game player. Original videos remain read-only and reviewed decisions survive re-analysis.</span></section>
+<section class="panel">
+  <h2>New analysis</h2>
+  <form id="analysis-form" class="analysis-form">
+    <label class="wide">Analysis type<select id="analysis-mode"><option value="calibration">Calibration · explain a short section</option><option value="full_game">Create candidates · selected range or full game</option></select></label>
+    <label class="wide">Game<select id="analysis-recording" required><option value="">Choose a game</option>{% for recording in recordings %}<option value="{{ recording.recording_id }}" data-duration="{{ recording.duration_seconds or 0 }}">{{ recording.title }}{% if recording.duration_seconds %} · {{ '%02d:%02d'|format((recording.duration_seconds // 60)|int, (recording.duration_seconds % 60)|int) }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="wide">Trained model<select id="analysis-model" required><option value="">Choose a completed model</option>{% for model in models %}<option value="{{ model.job_id }}">{{ model.model_name }} · {{ model.completed_at }}</option>{% endfor %}</select></label>
+    <label>Start time (seconds)<input id="analysis-start" type="number" min="0" step="0.1" value="0" required></label>
+    <label>End time (seconds)<input id="analysis-end" type="number" min="0.1" step="0.1" value="30" required></label>
+    <label>Check every<input id="analysis-interval" type="number" min="0.1" max="10" step="0.1" value="0.5" required><small>seconds per frame</small></label>
+    <label>Confidence<input id="analysis-confidence" type="number" min="0.01" max="1" step="0.01" value="0.25" required></label>
+    <label>Crossing window<input id="analysis-crossing-window" type="number" min="0.3" max="2" step="0.1" value="1.0" required><small>seconds from above to below rim</small></label>
+    <button class="primary" type="submit" {% if not inference_available or not gpu.cuda_available or not recordings or not models %}disabled{% endif %}>Run calibration</button>
+  </form>
+  {% if not models %}<p class="bad">Complete a training job before running a detector test.</p>{% elif not inference_available %}<p class="bad">Detector tools are not installed. Use the NVIDIA GPU image.</p>{% elif not gpu.cuda_available %}<p class="bad">CUDA must be available before analysis can start.</p>{% endif %}
+  <p id="analysis-message" class="hint">Start with calibration: 20–30 seconds around a known made basket at a 0.2-second interval. No highlights are created by calibration.</p>
+</section>
+<section class="panel analysis-jobs">
+  <h2>Analysis jobs</h2>
+  <div id="analysis-job-list" class="analysis-job-list">
+    {% for job in jobs %}
+    <article class="analysis-job" data-job-id="{{ job.job_id }}" data-status="{{ job.status }}">
+      <div><strong>{{ job.recording_title }}</strong><span>{{ job.mode|replace('_',' ')|title }} · {{ '%.1f'|format(job.start_seconds) }}–{{ '%.1f'|format(job.end_seconds) }} sec · every {{ job.sample_interval_seconds }} sec</span></div>
+      <div class="analysis-progress"><span>{{ job.status|capitalize }} · {{ job.processed_frames }} frames · {{ job.detection_count }} detections · {{ job.candidate_count }} {{ 'candidate' if job.candidate_count == 1 else 'candidates' }}</span><progress max="100" value="{{ job.progress_percent }}"></progress></div>
+      <div class="analysis-actions">{% if job.status in ('queued','running') %}<button type="button" data-cancel>Stop</button>{% endif %}{% if job.processed_frames %}<button type="button" data-results>View results</button>{% endif %}{% if job.candidate_count and job.mode == 'full_game' %}<a class="button" href="/recordings/{{ job.recording_id }}">Review highlights</a>{% endif %}<button type="button" data-log>View log</button></div>
+      {% if job.error_message %}<p class="bad job-error">{{ job.error_message }}</p>{% endif %}
+    </article>
+    {% else %}<p class="hint">No analysis jobs yet.</p>{% endfor %}
+  </div>
+</section>
+<dialog id="analysis-results-dialog"><div class="dialog-title"><div><h2>Detection and crossing evidence</h2><p id="results-summary" class="hint"></p></div><button type="button" data-close-results>Close</button></div><div id="analysis-results" class="result-grid"></div></dialog>
+<dialog id="analysis-log-dialog"><h2>Analysis log</h2><pre id="analysis-log"></pre><div class="dialog-actions"><button type="button" data-close-log>Close</button></div></dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/analyze.js"></script>{% endblock %}

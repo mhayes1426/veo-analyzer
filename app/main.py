@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from . import __version__
 from .annotations import FRAME_OFFSETS, annotation_frame_path, detailed_frame_times, extract_annotation_frame
+from .analysis_jobs import inference_runtime_available, launch_analysis
 from .catalog import scan_media
 from .config import Settings
 from .db import Database
@@ -58,6 +59,11 @@ async def lifespan(_: FastAPI):
             """UPDATE training_jobs SET status='failed', error_message='Analyzer restarted during training',
                completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
                WHERE status IN ('queued','preparing','running')"""
+        )
+        connection.execute(
+            """UPDATE analysis_jobs SET status='failed', error_message='Analyzer restarted during analysis',
+               completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+               WHERE status IN ('queued','running')"""
         )
     task = asyncio.create_task(catalog_loop())
     yield
@@ -133,6 +139,25 @@ class TrainingJobInput(BaseModel):
         return self
 
 
+class AnalysisJobInput(BaseModel):
+    recording_id: str = Field(min_length=1, max_length=100)
+    training_job_id: str = Field(min_length=1, max_length=100)
+    start_seconds: float = Field(default=0, ge=0)
+    end_seconds: float = Field(default=30, gt=0)
+    sample_interval_seconds: float = Field(default=0.5, ge=0.1, le=10)
+    confidence_threshold: float = Field(default=0.25, ge=0.01, le=1)
+    mode: str = Field(default="calibration", pattern=r"^(calibration|full_game)$")
+    crossing_window_seconds: float = Field(default=1.0, ge=0.3, le=2.0)
+
+    @model_validator(mode="after")
+    def valid_range(self):
+        if self.end_seconds <= self.start_seconds:
+            raise ValueError("End time must be after start time")
+        if self.mode == "calibration" and self.end_seconds - self.start_seconds > 600:
+            raise ValueError("Detector tests are limited to 10 minutes")
+        return self
+
+
 def training_job_dict(row) -> dict:
     result = {key: row[key] for key in (
         "job_id", "status", "model_name", "epochs", "image_size", "batch_size", "device",
@@ -141,6 +166,17 @@ def training_job_dict(row) -> dict:
     )}
     result["metrics"] = json.loads(row["metrics_json"] or "{}")
     result["model_available"] = bool(row["model_path"] and Path(row["model_path"]).is_file())
+    return result
+
+
+def analysis_job_dict(row) -> dict:
+    result = {key: row[key] for key in (
+        "job_id", "recording_id", "training_job_id", "status", "mode", "start_seconds", "end_seconds",
+        "sample_interval_seconds", "confidence_threshold", "progress_percent", "processed_frames",
+        "crossing_window_seconds", "detection_count", "candidate_count", "cancel_requested", "error_message", "created_at",
+        "started_at", "completed_at", "updated_at",
+    )}
+    result["recording_title"] = row["recording_title"] if "recording_title" in row.keys() else None
     return result
 
 
@@ -255,8 +291,11 @@ def create_training_job(payload: TrainingJobInput):
         active = connection.execute(
             "SELECT job_id FROM training_jobs WHERE status IN ('queued','preparing','running') LIMIT 1"
         ).fetchone()
-        if active:
-            raise HTTPException(409, "Another training job is already running")
+        active_analysis = connection.execute(
+            "SELECT job_id FROM analysis_jobs WHERE status IN ('queued','running') LIMIT 1"
+        ).fetchone()
+        if active or active_analysis:
+            raise HTTPException(409, "The GPU is already running another training or analysis job")
         job_id = str(uuid.uuid4())
         output_dir = settings.config_root / "training" / "jobs" / job_id
         connection.execute(
@@ -309,6 +348,155 @@ def training_job_log(job_id: str):
         raise HTTPException(404, "Training job not found")
     path = settings.config_root / "training" / "jobs" / job_id / "training.log"
     return {"log": path.read_text(errors="replace")[-20000:] if path.is_file() else "Training has not produced output yet."}
+
+
+@app.get("/analyze", response_class=HTMLResponse)
+def analysis_page(request: Request):
+    with db.connect() as connection:
+        recordings = connection.execute(
+            "SELECT recording_id,title,duration_seconds FROM recordings WHERE availability='present' ORDER BY created_at DESC"
+        ).fetchall()
+        models = connection.execute(
+            """SELECT job_id,model_name,completed_at FROM training_jobs
+               WHERE status='completed' AND model_path IS NOT NULL ORDER BY completed_at DESC"""
+        ).fetchall()
+        jobs = connection.execute(
+            """SELECT a.*,r.title AS recording_title FROM analysis_jobs a
+               JOIN recordings r ON r.recording_id=a.recording_id ORDER BY a.created_at DESC LIMIT 30"""
+        ).fetchall()
+    return templates.TemplateResponse(request, "analyze.html", {
+        "recordings": recordings, "models": models, "jobs": [analysis_job_dict(row) for row in jobs],
+        "inference_available": inference_runtime_available(), "gpu": gpu_diagnostics(),
+    })
+
+
+@app.get("/api/analysis/jobs")
+def list_analysis_jobs():
+    with db.connect() as connection:
+        rows = connection.execute(
+            """SELECT a.*,r.title AS recording_title FROM analysis_jobs a
+               JOIN recordings r ON r.recording_id=a.recording_id ORDER BY a.created_at DESC LIMIT 50"""
+        ).fetchall()
+    return {"jobs": [analysis_job_dict(row) for row in rows]}
+
+
+@app.post("/api/analysis/jobs", status_code=202)
+def create_analysis_job(payload: AnalysisJobInput):
+    if not inference_runtime_available():
+        raise HTTPException(409, "Detector testing is available only in the NVIDIA GPU image")
+    if not gpu_diagnostics().get("cuda_available"):
+        raise HTTPException(409, "CUDA is not available to PyTorch")
+    recording = get_recording(payload.recording_id)
+    if recording["availability"] != "present":
+        raise HTTPException(409, "The selected recording is unavailable")
+    if recording["duration_seconds"] is not None and payload.end_seconds > recording["duration_seconds"] + 0.01:
+        raise HTTPException(422, "End time exceeds the recording duration")
+    with db.transaction() as connection:
+        model = connection.execute(
+            """SELECT * FROM training_jobs WHERE job_id=? AND status='completed'
+               AND model_path IS NOT NULL""", (payload.training_job_id,),
+        ).fetchone()
+        if not model:
+            raise HTTPException(404, "Completed trained model not found")
+        model_path = Path(model["model_path"]).resolve()
+        model_root = (settings.config_root / "training" / "jobs" / payload.training_job_id).resolve()
+        if not model_path.is_relative_to(model_root) or not model_path.is_file():
+            raise HTTPException(404, "Trained model file not found")
+        active_analysis = connection.execute(
+            "SELECT job_id FROM analysis_jobs WHERE status IN ('queued','running') LIMIT 1"
+        ).fetchone()
+        active_training = connection.execute(
+            "SELECT job_id FROM training_jobs WHERE status IN ('queued','preparing','running') LIMIT 1"
+        ).fetchone()
+        if active_analysis or active_training:
+            raise HTTPException(409, "The GPU is already running another training or analysis job")
+        job_id = str(uuid.uuid4())
+        output_dir = settings.config_root / "analysis" / "jobs" / job_id
+        connection.execute(
+            """INSERT INTO analysis_jobs
+               (job_id,recording_id,training_job_id,status,mode,start_seconds,end_seconds,
+                sample_interval_seconds,confidence_threshold,crossing_window_seconds,output_dir)
+               VALUES (?,?,?,'queued',?,?,?,?,?,?,?)""",
+            (job_id, payload.recording_id, payload.training_job_id, payload.mode, payload.start_seconds,
+             payload.end_seconds, payload.sample_interval_seconds, payload.confidence_threshold,
+             payload.crossing_window_seconds, str(output_dir)),
+        )
+        row = connection.execute("SELECT * FROM analysis_jobs WHERE job_id=?", (job_id,)).fetchone()
+    try:
+        launch_analysis(job_id, settings)
+    except OSError as exc:
+        with db.transaction() as connection:
+            connection.execute(
+                """UPDATE analysis_jobs SET status='failed',error_message=?,completed_at=CURRENT_TIMESTAMP,
+                   updated_at=CURRENT_TIMESTAMP WHERE job_id=?""", (str(exc)[:1000], job_id),
+            )
+        raise HTTPException(503, "Could not launch detector test") from exc
+    return analysis_job_dict(row)
+
+
+@app.get("/api/analysis/jobs/{job_id}")
+def get_analysis_job(job_id: str):
+    with db.connect() as connection:
+        row = connection.execute(
+            """SELECT a.*,r.title AS recording_title FROM analysis_jobs a
+               JOIN recordings r ON r.recording_id=a.recording_id WHERE a.job_id=?""", (job_id,),
+        ).fetchone()
+        results = connection.execute(
+            """SELECT result_id,frame_time_seconds,detections_json,detection_count,
+                      explanation_json,candidate_event_id
+               FROM analysis_results WHERE job_id=? ORDER BY frame_time_seconds""", (job_id,),
+        ).fetchall()
+    if not row:
+        raise HTTPException(404, "Analysis job not found")
+    payload = analysis_job_dict(row)
+    payload["results"] = []
+    for result in results:
+        item = dict(result)
+        item["detections"] = json.loads(item.pop("detections_json"))
+        explanation = item.pop("explanation_json")
+        item["explanation"] = json.loads(explanation) if explanation else None
+        item["image_url"] = f"/api/analysis/results/{item['result_id']}/image"
+        payload["results"].append(item)
+    return payload
+
+
+@app.get("/api/analysis/jobs/{job_id}/log")
+def analysis_job_log(job_id: str):
+    with db.connect() as connection:
+        row = connection.execute("SELECT job_id FROM analysis_jobs WHERE job_id=?", (job_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Analysis job not found")
+    path = settings.config_root / "analysis" / "jobs" / job_id / "analysis.log"
+    return {"log": path.read_text(errors="replace")[-20000:] if path.is_file() else "Analysis has not produced output yet."}
+
+
+@app.post("/api/analysis/jobs/{job_id}/cancel", status_code=202)
+def cancel_analysis_job(job_id: str):
+    with db.transaction() as connection:
+        row = connection.execute("SELECT status FROM analysis_jobs WHERE job_id=?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Analysis job not found")
+        if row["status"] not in {"queued", "running"}:
+            raise HTTPException(409, "Analysis job is no longer active")
+        connection.execute(
+            "UPDATE analysis_jobs SET cancel_requested=1,updated_at=CURRENT_TIMESTAMP WHERE job_id=?", (job_id,),
+        )
+    return {"job_id": job_id, "stop_requested": True}
+
+
+@app.get("/api/analysis/results/{result_id}/image")
+def analysis_result_image(result_id: str):
+    with db.connect() as connection:
+        row = connection.execute(
+            "SELECT result_id,job_id,image_path FROM analysis_results WHERE result_id=?", (result_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Analysis result not found")
+    root = (settings.config_root / "analysis" / "jobs" / row["job_id"]).resolve()
+    image_path = Path(row["image_path"]).resolve()
+    if not image_path.is_relative_to(root) or not image_path.is_file():
+        raise HTTPException(404, "Analysis result image not found")
+    return FileResponse(image_path, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
 
 
 @app.get("/api/training/export/yolo")
@@ -673,7 +861,13 @@ def update_event(event_id: str, event: EventInput):
     recording = get_recording(existing["recording_id"])
     if recording["duration_seconds"] is not None and event.play_until_seconds > recording["duration_seconds"] + 0.01:
         raise HTTPException(422, "Playback window exceeds recording duration")
-    source = "corrected" if existing["source"] == "model" else existing["source"]
+    content_changed = (
+        event.event_type != existing["event_type"]
+        or abs(event.event_time_seconds - existing["event_time_seconds"]) > .001
+        or abs(event.play_from_seconds - existing["play_from_seconds"]) > .001
+        or abs(event.play_until_seconds - existing["play_until_seconds"]) > .001
+    )
+    source = "corrected" if existing["source"] == "model" and content_changed else existing["source"]
     with db.transaction() as connection:
         connection.execute(
             """UPDATE events SET event_type=?, event_time_seconds=?, play_from_seconds=?,

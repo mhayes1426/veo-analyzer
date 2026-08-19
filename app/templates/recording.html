@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ recording.title }} · Veo Analyzer{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="/static/fullscreen.css">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/fullscreen.css"><link rel="stylesheet" href="/static/review.css">{% endblock %}
 {% block content %}
 <a href="/" class="back">← Game library</a>
 <section class="watch-head"><div><h1>{{ recording.title }}</h1><p id="clock">00:00:00.000</p></div><a class="button secondary" href="/api/recordings/{{ recording.recording_id }}/export/json">Export JSON</a></section>

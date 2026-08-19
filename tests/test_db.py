@@ -9,12 +9,18 @@ def test_schema_initializes(roots):
     db.initialize()
     with db.connect() as connection:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"recordings", "events", "annotation_frames", "annotation_boxes", "annotation_size_presets", "training_jobs"} <= tables
+    assert {"recordings", "events", "annotation_frames", "annotation_boxes", "annotation_size_presets",
+            "training_jobs", "analysis_jobs", "analysis_results"} <= tables
     with db.connect() as connection:
         event_columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
         frame_columns = {row[1] for row in connection.execute("PRAGMA table_info(annotation_frames)")}
+        analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_jobs)")}
+        result_columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_results)")}
     assert "sequence_outcome" in event_columns
+    assert "analysis_job_id" in event_columns
     assert {"review_status", "detail_group_id"} <= frame_columns
+    assert {"mode", "crossing_window_seconds", "candidate_count", "cancel_requested"} <= analysis_columns
+    assert {"explanation_json", "candidate_event_id"} <= result_columns
 
 
 def test_annotation_box_constraints(roots):
@@ -92,4 +98,40 @@ def test_training_job_constraints(roots):
                    (job_id,status,model_name,epochs,image_size,batch_size,device,output_dir)
                    VALUES (?,?,?,?,?,?,?,?)""",
                 (str(uuid.uuid4()), "unknown", "yolo11n.pt", 50, 640, 8, "0", str(config / "bad")),
+            )
+
+
+def test_analysis_job_constraints_and_relationships(roots):
+    import sqlite3
+    import uuid
+
+    _, config, _ = roots
+    db = Database(config / "analyzer.db")
+    db.initialize()
+    recording_id, training_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with db.transaction() as connection:
+        connection.execute(
+            "INSERT INTO recordings (recording_id,media_path,title,size_bytes,mtime_ns) VALUES (?,?,?,?,?)",
+            (recording_id, "game.mp4", "Game", 1, 1),
+        )
+        connection.execute(
+            """INSERT INTO training_jobs
+               (job_id,status,model_name,epochs,image_size,batch_size,device,output_dir)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (training_id, "completed", "yolo11n.pt", 1, 640, 8, "0", str(config / "training")),
+        )
+        connection.execute(
+            """INSERT INTO analysis_jobs
+               (job_id,recording_id,training_job_id,status,start_seconds,end_seconds,
+                sample_interval_seconds,confidence_threshold,output_dir)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (str(uuid.uuid4()), recording_id, training_id, "queued", 0, 30, .5, .25, str(config / "analysis")),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """INSERT INTO analysis_jobs
+                   (job_id,recording_id,training_job_id,status,start_seconds,end_seconds,
+                    sample_interval_seconds,confidence_threshold,output_dir)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (str(uuid.uuid4()), recording_id, training_id, "queued", 30, 10, .5, .25, str(config / "bad")),
             )

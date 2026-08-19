@@ -2,7 +2,7 @@
 
 Veo Analyzer is a local-first companion to [Veo Backup](https://github.com/mhayes1426/veo-backup). It adds chapter-style basketball highlights to full-game recordings without modifying, deleting, or re-encoding the original MP4 files.
 
-The first release is intentionally manual: it provides a trustworthy review and labeling interface before any model is allowed to propose events. Later releases add human-reviewed made-basket detection, then other basketball events.
+Veo Analyzer begins with a trustworthy manual review and labeling interface, then uses locally trained models to propose human-reviewed made-basket candidates. Other basketball event types remain future work.
 
 ## Safety contract
 
@@ -63,6 +63,12 @@ The YOLO dataset export contains reviewed frame images, normalized basketball/ri
 
 The NVIDIA image also provides local Training Jobs on the Training & GPU page. A job snapshots reviewed frames into recording-level train/validation/test splits, trains an Ultralytics YOLO11 detector on CUDA, records progress and metrics in Analyzer's SQLite database, and stores versioned model artifacts under `/config/training/jobs`. Training is explicitly started by the user and never modifies source videos.
 
+## Made-basket analysis
+
+After a model finishes training, open **Analyze** to run it against an adjustable section of a cataloged game. Calibration jobs sample a short range, display timestamped basketball/hoop detections, and explain whether each ball position is above, near, or below the rim. Full-game jobs apply the same detector in one-minute batches and look for a horizontally aligned above-to-below rim crossing.
+
+Crossings become `made_basket` candidates with model/run provenance, confidence, and the configured pre/post playback window. They are never auto-approved. The game player provides one-click approval/rejection plus timestamp correction, re-analysis never overwrites reviewed decisions, and long-running jobs can be stopped from the UI. Job state, normalized detections, evidence previews, and logs remain local under `/config/analysis/jobs`; source recordings remain read-only.
+
 ## Status
 
-Architecture and milestone plan are defined. Application implementation begins with Phase 0 and Phase 1 in the plan.
+Manual chapters, annotation, local GPU training, explainable calibration, and human-reviewed made-basket candidate creation are implemented.

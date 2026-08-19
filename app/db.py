@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS events (
     review_status TEXT NOT NULL CHECK(review_status IN ('candidate','approved','rejected')),
     source TEXT NOT NULL CHECK(source IN ('manual','model','corrected')),
     model_version TEXT,
+    analysis_job_id TEXT REFERENCES analysis_jobs(job_id) ON DELETE SET NULL,
     sequence_outcome TEXT NOT NULL DEFAULT 'uncertain' CHECK(sequence_outcome IN ('made','missed','uncertain')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -104,6 +105,48 @@ CREATE TABLE IF NOT EXISTS training_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_training_jobs_created
 ON training_jobs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS analysis_jobs (
+    job_id TEXT PRIMARY KEY,
+    recording_id TEXT NOT NULL REFERENCES recordings(recording_id) ON DELETE CASCADE,
+    training_job_id TEXT NOT NULL REFERENCES training_jobs(job_id) ON DELETE RESTRICT,
+    status TEXT NOT NULL CHECK(status IN ('queued','running','completed','failed')),
+    mode TEXT NOT NULL DEFAULT 'calibration' CHECK(mode IN ('calibration','full_game')),
+    start_seconds REAL NOT NULL CHECK(start_seconds >= 0),
+    end_seconds REAL NOT NULL CHECK(end_seconds > start_seconds),
+    sample_interval_seconds REAL NOT NULL CHECK(sample_interval_seconds >= 0.1),
+    confidence_threshold REAL NOT NULL CHECK(confidence_threshold >= 0 AND confidence_threshold <= 1),
+    crossing_window_seconds REAL NOT NULL DEFAULT 1.0 CHECK(crossing_window_seconds >= 0.3 AND crossing_window_seconds <= 2.0),
+    progress_percent REAL NOT NULL DEFAULT 0 CHECK(progress_percent >= 0 AND progress_percent <= 100),
+    processed_frames INTEGER NOT NULL DEFAULT 0,
+    detection_count INTEGER NOT NULL DEFAULT 0,
+    candidate_count INTEGER NOT NULL DEFAULT 0,
+    cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK(cancel_requested IN (0,1)),
+    output_dir TEXT NOT NULL,
+    error_message TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TEXT,
+    completed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_jobs_created
+ON analysis_jobs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS analysis_results (
+    result_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL REFERENCES analysis_jobs(job_id) ON DELETE CASCADE,
+    frame_time_seconds REAL NOT NULL CHECK(frame_time_seconds >= 0),
+    image_path TEXT NOT NULL,
+    detections_json TEXT NOT NULL,
+    explanation_json TEXT,
+    candidate_event_id TEXT REFERENCES events(event_id) ON DELETE SET NULL,
+    detection_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_results_job_time
+ON analysis_results(job_id, frame_time_seconds);
 """
 
 
@@ -132,6 +175,8 @@ class Database:
                 """ALTER TABLE events ADD COLUMN sequence_outcome TEXT NOT NULL DEFAULT 'uncertain'
                    CHECK(sequence_outcome IN ('made','missed','uncertain'))"""
             )
+        if "analysis_job_id" not in event_columns:
+            connection.execute("ALTER TABLE events ADD COLUMN analysis_job_id TEXT")
         frame_columns = {row[1] for row in connection.execute("PRAGMA table_info(annotation_frames)")}
         if "review_status" not in frame_columns:
             connection.execute(
@@ -140,6 +185,22 @@ class Database:
             )
         if "detail_group_id" not in frame_columns:
             connection.execute("ALTER TABLE annotation_frames ADD COLUMN detail_group_id TEXT")
+        analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_jobs)")}
+        if "mode" not in analysis_columns:
+            connection.execute("ALTER TABLE analysis_jobs ADD COLUMN mode TEXT NOT NULL DEFAULT 'calibration'")
+        if "crossing_window_seconds" not in analysis_columns:
+            connection.execute(
+                "ALTER TABLE analysis_jobs ADD COLUMN crossing_window_seconds REAL NOT NULL DEFAULT 1.0"
+            )
+        if "candidate_count" not in analysis_columns:
+            connection.execute("ALTER TABLE analysis_jobs ADD COLUMN candidate_count INTEGER NOT NULL DEFAULT 0")
+        if "cancel_requested" not in analysis_columns:
+            connection.execute("ALTER TABLE analysis_jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0")
+        result_columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_results)")}
+        if "explanation_json" not in result_columns:
+            connection.execute("ALTER TABLE analysis_results ADD COLUMN explanation_json TEXT")
+        if "candidate_event_id" not in result_columns:
+            connection.execute("ALTER TABLE analysis_results ADD COLUMN candidate_event_id TEXT")
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
