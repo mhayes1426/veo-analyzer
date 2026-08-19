@@ -23,6 +23,7 @@
       <button class="tool" data-class="hoop" title="Annotate hoop / rim"><span class="swatch hoop"></span><span>Hoop</span><kbd>R</kbd></button>
       <button id="show-all-boxes" aria-pressed="false" title="Show both annotation types"><span class="visibility-label">Both</span><kbd>V</kbd></button>
     </div>
+    <button id="reset-box-size">Reset selected box size</button>
     <div class="review-controls" role="group" aria-label="Frame review status">
       <button data-review="pending">Pending</button>
       <button data-review="reviewed">Reviewed</button>
@@ -57,6 +58,13 @@
         <li>The event moment is the completed passage through the rim, not shot release or first contact.</li>
         <li>Leave the basketball absent when it is not visible; mark unusable frames Skipped.</li>
       </ul>
+      <h3>Box size and placement</h3>
+      <ul>
+        <li>Click once to place a box using the last size used for that object.</li>
+        <li>Drag on empty space to draw a custom box and remember its new size.</li>
+        <li>Select a box and drag its white corner handle to resize it. The resized dimensions become the new remembered size.</li>
+        <li>Remembered basketball and hoop sizes are separate and apply only to this recording.</li>
+      </ul>
       <h3>Frame review status</h3>
       <ul>
         <li><strong>Pending:</strong> the frame has not been fully checked.</li>
@@ -90,4 +98,4 @@
   </div>
 </dialog>
 {% endblock %}
-{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},frames:{{ frames_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}
+{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},recordingId:{{ recording.recording_id|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}

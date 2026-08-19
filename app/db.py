@@ -71,6 +71,15 @@ ON annotation_frames(event_id, frame_index);
 
 CREATE INDEX IF NOT EXISTS idx_annotation_boxes_frame
 ON annotation_boxes(frame_id);
+
+CREATE TABLE IF NOT EXISTS annotation_size_presets (
+    recording_id TEXT NOT NULL REFERENCES recordings(recording_id) ON DELETE CASCADE,
+    object_class TEXT NOT NULL CHECK(object_class IN ('basketball','hoop')),
+    width REAL NOT NULL CHECK(width > 0 AND width <= 1),
+    height REAL NOT NULL CHECK(height > 0 AND height <= 1),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (recording_id, object_class)
+);
 """
 
 

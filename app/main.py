@@ -105,6 +105,12 @@ class SequenceOutcomeInput(BaseModel):
     sequence_outcome: str = Field(pattern=r"^(made|missed|uncertain)$")
 
 
+class AnnotationSizeInput(BaseModel):
+    object_class: str = Field(pattern=r"^(basketball|hoop)$")
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+
 def get_recording(recording_id: str):
     with db.connect() as connection:
         row = connection.execute("SELECT * FROM recordings WHERE recording_id=?", (recording_id,)).fetchone()
@@ -268,6 +274,10 @@ def annotation_page(request: Request, event_id: str):
                WHERE f.event_id=? ORDER BY f.frame_index, b.created_at""",
             (event_id,),
         ).fetchall()
+        preset_rows = connection.execute(
+            "SELECT object_class, width, height FROM annotation_size_presets WHERE recording_id=?",
+            (recording["recording_id"],),
+        ).fetchall()
     boxes_by_frame: dict[str, list[dict]] = {row["frame_id"]: [] for row in frames}
     for box in boxes:
         boxes_by_frame[box["frame_id"]].append(dict(box))
@@ -275,8 +285,36 @@ def annotation_page(request: Request, event_id: str):
     return templates.TemplateResponse(
         request,
         "annotate.html",
-        {"event": event, "recording": recording, "frames_json": json.dumps(frame_data)},
+        {"event": event, "recording": recording, "frames_json": json.dumps(frame_data),
+         "size_presets_json": json.dumps({row["object_class"]: {"width": row["width"], "height": row["height"]} for row in preset_rows})},
     )
+
+
+@app.put("/api/recordings/{recording_id}/annotation-size")
+def save_annotation_size(recording_id: str, payload: AnnotationSizeInput):
+    get_recording(recording_id)
+    with db.transaction() as connection:
+        connection.execute(
+            """INSERT INTO annotation_size_presets (recording_id, object_class, width, height)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(recording_id, object_class) DO UPDATE SET
+               width=excluded.width, height=excluded.height, updated_at=CURRENT_TIMESTAMP""",
+            (recording_id, payload.object_class, payload.width, payload.height),
+        )
+    return {"recording_id": recording_id, **payload.model_dump()}
+
+
+@app.delete("/api/recordings/{recording_id}/annotation-size/{object_class}")
+def reset_annotation_size(recording_id: str, object_class: str):
+    get_recording(recording_id)
+    if object_class not in {"basketball", "hoop"}:
+        raise HTTPException(422, "Unknown annotation class")
+    with db.transaction() as connection:
+        connection.execute(
+            "DELETE FROM annotation_size_presets WHERE recording_id=? AND object_class=?",
+            (recording_id, object_class),
+        )
+    return {"recording_id": recording_id, "object_class": object_class, "reset": True}
 
 
 @app.get("/api/recordings/{recording_id}/media")

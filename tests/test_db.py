@@ -9,7 +9,7 @@ def test_schema_initializes(roots):
     db.initialize()
     with db.connect() as connection:
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"recordings", "events", "annotation_frames", "annotation_boxes"} <= tables
+    assert {"recordings", "events", "annotation_frames", "annotation_boxes", "annotation_size_presets"} <= tables
     with db.connect() as connection:
         event_columns = {row[1] for row in connection.execute("PRAGMA table_info(events)")}
         frame_columns = {row[1] for row in connection.execute("PRAGMA table_info(annotation_frames)")}
@@ -45,4 +45,28 @@ def test_annotation_box_constraints(roots):
                 """INSERT INTO annotation_boxes
                    (box_id,frame_id,object_class,x_center,y_center,width,height) VALUES (?,?,?,?,?,?,?)""",
                 (str(uuid.uuid4()), frame_id, "player", .5, .5, .1, .1),
+            )
+
+
+def test_annotation_size_presets_are_per_recording_and_class(roots):
+    import sqlite3
+    import uuid
+
+    _, config, _ = roots
+    db = Database(config / "analyzer.db")
+    db.initialize()
+    recording_id = str(uuid.uuid4())
+    with db.transaction() as connection:
+        connection.execute(
+            "INSERT INTO recordings (recording_id,media_path,title,size_bytes,mtime_ns) VALUES (?,?,?,?,?)",
+            (recording_id, "game.mp4", "Game", 1, 1),
+        )
+        connection.execute(
+            "INSERT INTO annotation_size_presets (recording_id,object_class,width,height) VALUES (?,?,?,?)",
+            (recording_id, "basketball", .03, .04),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO annotation_size_presets (recording_id,object_class,width,height) VALUES (?,?,?,?)",
+                (recording_id, "player", .1, .1),
             )

@@ -44,3 +44,46 @@
   max-height: 100vh;
   object-fit: contain;
 }
+
+.chapters {
+  gap: 6px;
+}
+
+.chapter {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 7px 9px;
+}
+
+.chapter-title {
+  min-width: 0;
+}
+
+.chapter-title strong,
+.chapter-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-title small {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.chapter-actions {
+  align-items: center;
+}
+
+.chapter-actions button,
+.chapter-actions .mini-button {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+}

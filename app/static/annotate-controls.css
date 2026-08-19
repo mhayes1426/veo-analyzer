@@ -26,6 +26,18 @@
   color: #ff9da5;
 }
 
+.resize-handle {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #07111c;
+  border-radius: 50%;
+  background: #fff;
+  cursor: nwse-resize;
+}
+
 .tools-title,
 .guide-head {
   display: flex;
@@ -52,8 +64,9 @@
 .review-controls,
 .annotation-mode-controls {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
+  width: 100%;
 }
 
 .review-controls button,
@@ -66,7 +79,9 @@
 .annotation-mode-controls button {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 5px;
+  white-space: nowrap;
 }
 
 .annotation-mode-controls button.active {
@@ -75,7 +90,12 @@
 }
 
 .annotation-mode-controls kbd {
+  flex: 0 0 auto;
   padding: 1px 4px;
+}
+
+.annotation-mode-controls .swatch {
+  flex: 0 0 auto;
 }
 
 .review-controls button.active {
