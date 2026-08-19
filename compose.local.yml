@@ -5,6 +5,8 @@ services:
     ports:
       - "8090:8080"
     environment:
+      PUID: "1000"
+      PGID: "1000"
       MEDIA_ROOT: /data
       CONFIG_ROOT: /config
       EXPORT_ROOT: /exports
@@ -14,4 +16,3 @@ services:
       - ./local-data/config:/config:rw
       - ./local-data/exports:/exports:rw
     restart: unless-stopped
-

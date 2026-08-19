@@ -20,6 +20,8 @@
   <DonateLink/>
   <Requires>Unraid NVIDIA Driver plugin for future AI analysis. Manual chapters work without GPU access.</Requires>
   <Config Name="Web UI Port" Target="8080" Default="8090" Mode="tcp" Description="Veo Analyzer web interface" Type="Port" Display="always" Required="true" Mask="false">8090</Config>
+  <Config Name="User ID" Target="PUID" Default="99" Mode="" Description="Unraid nobody user ID" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="Group ID" Target="PGID" Default="100" Mode="" Description="Unraid users group ID" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="Basketball Media" Target="/data" Default="/mnt/user/media/basketball" Mode="ro" Description="Read-only folder containing full-game recordings; change this to your media share" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/basketball</Config>
   <Config Name="Application Data" Target="/config" Default="/mnt/user/appdata/veo-analyzer" Mode="rw" Description="Analyzer database and future model cache" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/veo-analyzer</Config>
   <Config Name="Exports" Target="/exports" Default="/mnt/user/media/basketball-analysis" Mode="rw" Description="JSON chapters and optional derived media; change this to your export share" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/basketball-analysis</Config>

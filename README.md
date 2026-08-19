@@ -48,6 +48,8 @@ docker compose -f compose.local.yml down
 
 To use a folder elsewhere on the computer, replace `./sample-media` on the left side of the `/data:ro` mapping in `compose.local.yml`. Docker Desktop must be allowed to share that folder.
 
+The image supports `PUID` and `PGID` for writable bind mounts. The Unraid template defaults to Unraid's standard `99:100`; the local Compose file defaults to `1000:1000`.
+
 ## Status
 
 Architecture and milestone plan are defined. Application implementation begins with Phase 0 and Phase 1 in the plan.
