@@ -49,16 +49,33 @@
   padding: 6px 9px;
 }
 
-.review-controls {
+.review-controls,
+.annotation-mode-controls {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
 }
 
-.review-controls button {
+.review-controls button,
+.annotation-mode-controls button {
   justify-content: center;
   padding: 8px 4px;
   font-size: 12px;
+}
+
+.annotation-mode-controls button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.annotation-mode-controls button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.annotation-mode-controls kbd {
+  padding: 1px 4px;
 }
 
 .review-controls button.active {

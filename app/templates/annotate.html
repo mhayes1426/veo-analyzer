@@ -18,8 +18,11 @@
   </section>
   <aside class="tools">
     <div class="tools-title"><h2>Draw boxes</h2><button id="open-guide">Annotation guide</button></div>
-    <button class="tool active" data-class="basketball"><span class="swatch ball"></span> Basketball <kbd>B</kbd></button>
-    <button class="tool" data-class="hoop"><span class="swatch hoop"></span> Hoop / rim <kbd>R</kbd></button>
+    <div class="annotation-mode-controls" role="group" aria-label="Visible annotation type">
+      <button class="tool active" data-class="basketball" title="Annotate basketball"><span class="swatch ball"></span><span>Ball</span><kbd>B</kbd></button>
+      <button class="tool" data-class="hoop" title="Annotate hoop / rim"><span class="swatch hoop"></span><span>Hoop</span><kbd>R</kbd></button>
+      <button id="show-all-boxes" aria-pressed="false" title="Show both annotation types"><span class="visibility-label">Both</span><kbd>V</kbd></button>
+    </div>
     <div class="review-controls" role="group" aria-label="Frame review status">
       <button data-review="pending">Pending</button>
       <button data-review="reviewed">Reviewed</button>
@@ -28,10 +31,9 @@
     <button id="copy-previous">Copy previous frame <kbd>C</kbd></button>
     <button id="propagate-hoop">Fill missing hoop frames <kbd>P</kbd></button>
     <button id="propagate-ball">Fill missing basketball frames <kbd>A</kbd></button>
-    <button id="delete-box" class="danger">Delete selected box <kbd>Delete</kbd></button>
     <button id="clear-all-frames" class="danger">Clear all frames <kbd>X</kbd></button>
     <button id="save-boxes" class="primary">Save frame <kbd>S</kbd></button>
-    <p class="hint">Click and drag on the image. Click an existing box to select it. Boxes save as normalized coordinates; the video is never modified.</p>
+    <p class="hint">Only the selected type is shown while drawing. Use Both to review alignment. Remove a box with its × button or the Delete key; hiding never removes it.</p>
     <div id="box-list"></div>
     <aside id="guide-drawer" class="annotation-guide" aria-hidden="true">
       <div class="guide-head"><h2>Annotation guide</h2><button id="close-guide" aria-label="Close annotation guide">×</button></div>
