@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Annotate · {{ recording.title }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="/static/annotate.css"><link rel="stylesheet" href="/static/annotate-controls.css"><link rel="stylesheet" href="/static/annotate-detail.css"><link rel="stylesheet" href="/static/annotate-modal.css">{% endblock %}
+{% block content %}
+<a class="back" href="/recordings/{{ recording.recording_id }}">← Back to game</a>
+<section class="annotation-head">
+  <div><h1>Annotate made basket</h1><p>{{ recording.title }} · event at {{ '%.2f'|format(event.event_time_seconds) }} seconds</p></div>
+  <div class="annotation-actions"><label class="outcome-field">Sequence outcome<select id="sequence-outcome"><option value="made" {% if event.sequence_outcome == 'made' %}selected{% endif %}>Made</option><option value="missed" {% if event.sequence_outcome == 'missed' %}selected{% endif %}>Missed</option><option value="uncertain" {% if event.sequence_outcome == 'uncertain' %}selected{% endif %}>Uncertain</option></select></label><span id="save-state">Saved</span><a class="button secondary" href="/api/events/{{ event.event_id }}/annotations/export">Export annotations</a></div>
+</section>
+<div class="annotation-layout">
+  <section>
+    <div id="annotation-stage"><img id="frame-image" alt="Annotation frame"><div id="box-layer"></div></div>
+    <div class="frame-controls"><button id="previous-frame">← Previous frame</button><strong id="frame-label"></strong><button id="next-frame">Next frame →</button></div>
+    <div class="detail-action"><button id="generate-details">Generate detailed frames here</button><span class="hint">Adds 0.1-second frames around the selected image.</span></div>
+    <div class="detail-remove"><button id="remove-detail-group" class="danger hidden">Remove this detailed-frame group</button></div>
+    <div id="review-summary" class="review-summary"></div>
+    <div id="timeline" class="frame-timeline"></div>
+  </section>
+  <aside class="tools">
+    <div class="tools-title"><h2>Draw boxes</h2><button id="open-guide">Annotation guide</button></div>
+    <button class="tool active" data-class="basketball"><span class="swatch ball"></span> Basketball <kbd>B</kbd></button>
+    <button class="tool" data-class="hoop"><span class="swatch hoop"></span> Hoop / rim <kbd>R</kbd></button>
+    <div class="review-controls" role="group" aria-label="Frame review status">
+      <button data-review="pending">Pending</button>
+      <button data-review="reviewed">Reviewed</button>
+      <button data-review="skipped">Skipped</button>
+    </div>
+    <button id="copy-previous">Copy previous frame <kbd>C</kbd></button>
+    <button id="propagate-hoop">Fill missing hoop frames <kbd>P</kbd></button>
+    <button id="propagate-ball">Fill missing basketball frames <kbd>A</kbd></button>
+    <button id="delete-box" class="danger">Delete selected box <kbd>Delete</kbd></button>
+    <button id="clear-all-frames" class="danger">Clear all frames <kbd>X</kbd></button>
+    <button id="save-boxes" class="primary">Save frame <kbd>S</kbd></button>
+    <p class="hint">Click and drag on the image. Click an existing box to select it. Boxes save as normalized coordinates; the video is never modified.</p>
+    <div id="box-list"></div>
+    <aside id="guide-drawer" class="annotation-guide" aria-hidden="true">
+      <div class="guide-head"><h2>Annotation guide</h2><button id="close-guide" aria-label="Close annotation guide">×</button></div>
+      <h3>Hoop / rim</h3>
+      <ul>
+        <li>Label only the scoring hoop involved in this play.</li>
+        <li>Draw a tight box around the rim.</li>
+        <li>Exclude the backboard and most of the net.</li>
+        <li>After propagation, correct its position when the camera moves.</li>
+      </ul>
+      <h3>Basketball</h3>
+      <ul>
+        <li>Draw tightly around the visible game ball.</li>
+        <li>Do not include a hand, shadow, or extra surrounding space.</li>
+        <li>Never guess its position. Leave the basketball box absent when the ball is not visible.</li>
+      </ul>
+      <h3>Useful sequence</h3>
+      <ul>
+        <li>Include approach, above-rim, rim-overlap, below-rim, and downward-continuation frames.</li>
+        <li>Generate detailed frames around the actual rim crossing.</li>
+        <li>The event moment is the completed passage through the rim, not shot release or first contact.</li>
+        <li>Leave the basketball absent when it is not visible; mark unusable frames Skipped.</li>
+      </ul>
+      <h3>Frame review status</h3>
+      <ul>
+        <li><strong>Pending:</strong> the frame has not been fully checked.</li>
+        <li><strong>Reviewed:</strong> the frame is usable and complete. A reviewed frame may intentionally have no basketball box when the ball is not visible.</li>
+        <li><strong>Skipped:</strong> exclude a blurred, corrupted, transitional, or otherwise unusable frame from training.</li>
+      </ul>
+      <h3>Sequence outcome</h3>
+      <ul>
+        <li><strong>Made:</strong> the ball completes its passage through the rim.</li>
+        <li><strong>Missed:</strong> a shot approaches the scoring area but does not pass through.</li>
+        <li><strong>Uncertain:</strong> the outcome cannot be verified confidently.</li>
+      </ul>
+      <h3>Detailed frames</h3>
+      <ul>
+        <li>Generate detailed frames only around the likely rim crossing.</li>
+        <li>Purple timeline markers identify 0.1-second detailed frames.</li>
+        <li>Use a detailed frame’s removal button if the group was generated around the wrong moment.</li>
+        <li>Removing a detailed group never removes the original broad frames.</li>
+      </ul>
+    </aside>
+    <div id="guide-backdrop" class="guide-backdrop"></div>
+  </aside>
+</div>
+<dialog id="annotation-dialog" class="annotation-dialog">
+  <div class="modal-mark" aria-hidden="true">▣</div>
+  <h2 id="annotation-dialog-title">Confirm action</h2>
+  <p id="annotation-dialog-message"></p>
+  <div class="dialog-actions">
+    <button id="annotation-dialog-cancel">Cancel</button>
+    <button id="annotation-dialog-confirm" class="primary">Continue</button>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},frames:{{ frames_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}

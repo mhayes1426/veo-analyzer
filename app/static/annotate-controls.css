@@ -1,0 +1,148 @@
+.annotation-box {
+  cursor: move;
+}
+
+.box-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+}
+
+.box-list-item.selected {
+  color: var(--text);
+}
+
+.box-select {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.box-remove {
+  padding: 7px 11px;
+  color: #ff9da5;
+}
+
+.tools-title,
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tools-title h2,
+.guide-head h2 {
+  margin: 0;
+}
+
+.outcome-field {
+  min-width: 130px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.outcome-field select {
+  padding: 6px 9px;
+}
+
+.review-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.review-controls button {
+  justify-content: center;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+.review-controls button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.review-controls button[data-review="skipped"].active {
+  border-color: #ffbd4a;
+  color: #ffbd4a;
+}
+
+.review-summary {
+  margin: 8px 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 14px;
+}
+
+.frame-dot.skipped {
+  opacity: .55;
+  text-decoration: line-through;
+}
+
+.annotation-guide {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  right: 0;
+  width: min(430px, 92vw);
+  height: 100vh;
+  padding: 22px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: -20px 0 50px #0008;
+  transform: translateX(105%);
+  transition: transform 180ms ease-out;
+}
+
+.annotation-guide.open {
+  transform: translateX(0);
+}
+
+.guide-backdrop {
+  position: fixed;
+  z-index: 49;
+  inset: 0;
+  visibility: hidden;
+  background: #0009;
+  opacity: 0;
+  transition: opacity 180ms ease-out, visibility 180ms;
+}
+
+.guide-backdrop.open {
+  visibility: visible;
+  opacity: 1;
+}
+
+#close-guide {
+  padding: 6px 11px;
+  font-size: 22px;
+}
+
+.annotation-guide h3 {
+  margin: 14px 0 4px;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.annotation-guide ul {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.annotation-guide li + li {
+  margin-top: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .annotation-guide,
+  .guide-backdrop {
+    transition: none;
+  }
+}
