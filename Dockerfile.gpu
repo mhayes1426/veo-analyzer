@@ -1,6 +1,6 @@
 FROM pytorch/pytorch:2.13.0-cuda13.0-cudnn9-runtime
 
-ARG APP_VERSION=0.4.0
+ARG APP_VERSION=0.4.2
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -16,7 +16,7 @@ RUN apt-get update \
 WORKDIR /opt/veo-analyzer
 COPY pyproject.toml ./
 COPY app ./app
-RUN python -m pip install .
+RUN python -m pip install --break-system-packages .
 
 RUN mkdir -p /config /exports \
     && chown -R analyzer:analyzer /opt/veo-analyzer /config /exports

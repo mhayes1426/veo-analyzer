@@ -48,7 +48,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - uses: docker/metadata-action@v5
-        id: gpu-meta
+        id: gpu_meta
         with:
           images: ghcr.io/mhayes1426/veo-analyzer
           tags: |
@@ -59,8 +59,8 @@ jobs:
           context: .
           file: Dockerfile.gpu
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.gpu-meta.outputs.tags }}
-          labels: ${{ steps.gpu-meta.outputs.labels }}
+          tags: ${{ steps.gpu_meta.outputs.tags }}
+          labels: ${{ steps.gpu_meta.outputs.labels }}
           platforms: linux/amd64
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
