@@ -8,7 +8,8 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/mhayes1426/veo-analyzer/issues</Support>
   <Project>https://github.com/mhayes1426/veo-analyzer</Project>
-  <Overview>Local-first basketball highlight chapters for full-game Veo recordings. Originals are mounted read-only. Includes manual chapters now and is GPU-ready for later AI candidate detection.</Overview>
+  <Icon>https://raw.githubusercontent.com/mhayes1426/veo-analyzer/main/assets/veo-analyzer-icon.png</Icon>
+  <Overview>Local-first basketball video analysis with manual chapters, frame annotation, NVIDIA YOLO training, and human-reviewed made-basket candidates. Original recordings remain read-only.</Overview>
   <Category>MediaApp:Video Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/mhayes1426/veo-analyzer/main/unraid/veo-analyzer.xml</TemplateURL>
@@ -18,14 +19,14 @@
   <DateInstalled>0</DateInstalled>
   <DonateText/>
   <DonateLink/>
-  <Requires>Unraid NVIDIA Driver plugin. The GPU image includes CUDA-enabled PyTorch and is substantially larger than the standard image.</Requires>
+  <Requires>Unraid NVIDIA Driver plugin. The GPU image includes CUDA-enabled PyTorch and Ultralytics YOLO and is substantially larger than the standard image.</Requires>
   <Config Name="Web UI Port" Target="8080" Default="8090" Mode="tcp" Description="Veo Analyzer web interface" Type="Port" Display="always" Required="true" Mask="false">8090</Config>
   <Config Name="User ID" Target="PUID" Default="99" Mode="" Description="Unraid nobody user ID" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
   <Config Name="Group ID" Target="PGID" Default="100" Mode="" Description="Unraid users group ID" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="Basketball Media" Target="/data" Default="/mnt/user/media/basketball" Mode="ro" Description="Read-only folder containing full-game recordings; change this to your media share" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/basketball</Config>
-  <Config Name="Application Data" Target="/config" Default="/mnt/user/appdata/veo-analyzer" Mode="rw" Description="Analyzer database and future model cache" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/veo-analyzer</Config>
+  <Config Name="Application Data" Target="/config" Default="/mnt/user/appdata/veo-analyzer" Mode="rw" Description="Analyzer database, annotations, training jobs, models, analysis previews, and logs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/veo-analyzer</Config>
   <Config Name="Exports" Target="/exports" Default="/mnt/user/media/basketball-analysis" Mode="rw" Description="JSON chapters and optional derived media; change this to your export share" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/basketball-analysis</Config>
-  <Config Name="NVIDIA GPU" Target="NVIDIA_VISIBLE_DEVICES" Default="0" Mode="" Description="GPU index for future AI analysis" Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
+  <Config Name="NVIDIA GPU" Target="NVIDIA_VISIBLE_DEVICES" Default="0" Mode="" Description="GPU index used for local YOLO training and game analysis" Type="Variable" Display="advanced" Required="false" Mask="false">0</Config>
   <Config Name="Completed-file wait" Target="STABLE_AGE_SECONDS" Default="600" Mode="" Description="Minimum file age in seconds before discovery" Type="Variable" Display="advanced" Required="true" Mask="false">600</Config>
   <Config Name="Seconds before highlight" Target="DEFAULT_BEFORE_SECONDS" Default="8" Mode="" Description="Default playback lead-in" Type="Variable" Display="advanced" Required="true" Mask="false">8</Config>
   <Config Name="Seconds after highlight" Target="DEFAULT_AFTER_SECONDS" Default="5" Mode="" Description="Default playback follow-through" Type="Variable" Display="advanced" Required="true" Mask="false">5</Config>

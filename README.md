@@ -1,5 +1,7 @@
 # Veo Analyzer
 
+<img src="assets/veo-analyzer-icon.png" alt="Veo Analyzer icon" width="128">
+
 Veo Analyzer is a local-first companion to [Veo Backup](https://github.com/mhayes1426/veo-backup). It adds chapter-style basketball highlights to full-game recordings without modifying, deleting, or re-encoding the original MP4 files.
 
 Veo Analyzer begins with a trustworthy manual review and labeling interface, then uses locally trained models to propose human-reviewed made-basket candidates. Other basketball event types remain future work.
