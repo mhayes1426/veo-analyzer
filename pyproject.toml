@@ -1,6 +1,6 @@
 [project]
 name = "veo-analyzer"
-version = "0.7.2"
+version = "0.7.3"
 description = "Local-first basketball highlight chapters for Veo recordings"
 requires-python = ">=3.11"
 dependencies = [
