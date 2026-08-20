@@ -36,6 +36,7 @@ def launch_analysis(job_id: str, settings: Settings) -> None:
     log = (job_dir / "analysis.log").open("ab", buffering=0)
     environment = os.environ.copy()
     environment["YOLO_CONFIG_DIR"] = str(settings.config_root / "ultralytics")
+    environment.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     subprocess.Popen(
         [sys.executable, "-m", "app.analysis_jobs", job_id], stdout=log, stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL, start_new_session=True, env=environment,
@@ -280,7 +281,7 @@ def run_job(job_id: str) -> None:
                 raise RuntimeError(f"No video frames could be extracted near {cursor:.1f} seconds")
             predictions = model.predict(
                 source=[str(raw) for raw, _ in extracted], conf=job["confidence_threshold"],
-                device="0", verbose=False, stream=True,
+                device="0", batch=1, half=True, verbose=False, stream=True,
             )
             for (raw, time_seconds), result in zip(extracted, predictions):
                 detected = _detections(result)
