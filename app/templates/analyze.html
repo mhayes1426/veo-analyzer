@@ -8,7 +8,7 @@
   <h2>New analysis</h2>
   <form id="analysis-form" class="analysis-form">
     <label class="wide">Analysis type<select id="analysis-mode"><option value="calibration">Calibration · explain a short section</option><option value="full_game">Create candidates · selected range or full game</option></select></label>
-    <label class="wide">Game<select id="analysis-recording" required><option value="">Choose a game</option>{% for recording in recordings %}<option value="{{ recording.recording_id }}" data-duration="{{ recording.duration_seconds or 0 }}">{{ recording.title }}{% if recording.duration_seconds %} · {{ '%02d:%02d'|format((recording.duration_seconds // 60)|int, (recording.duration_seconds % 60)|int) }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="wide game-picker">Game<input id="analysis-recording-search" type="search" placeholder="Search games by date or team…" autocomplete="off" aria-label="Search available games"><select id="analysis-recording" required><option value="">Choose a game</option>{% for recording in recordings %}<option value="{{ recording.recording_id }}" data-duration="{{ recording.duration_seconds or 0 }}">{{ recording.title }}{% if recording.duration_seconds %} · {{ '%02d:%02d'|format((recording.duration_seconds // 60)|int, (recording.duration_seconds % 60)|int) }}{% endif %}</option>{% endfor %}</select><small id="analysis-recording-count">{{ recordings|length }} games available</small></label>
     <label class="wide">Trained model<select id="analysis-model" required><option value="">Choose a completed model</option>{% for model in models %}<option value="{{ model.job_id }}">{{ model.model_name }} · {{ model.completed_at }}</option>{% endfor %}</select></label>
     <label>Start time (seconds)<input id="analysis-start" type="number" min="0" step="0.1" value="0" required></label>
     <label>End time (seconds)<input id="analysis-end" type="number" min="0.1" step="0.1" value="30" required></label>
@@ -33,7 +33,18 @@
     {% else %}<p class="hint">No analysis jobs yet.</p>{% endfor %}
   </div>
 </section>
-<dialog id="analysis-results-dialog"><div class="dialog-title"><div><h2>Detection and crossing evidence</h2><p id="results-summary" class="hint"></p></div><button type="button" data-close-results>Close</button></div><div id="analysis-results" class="result-grid"></div></dialog>
+<dialog id="analysis-results-dialog"><div class="dialog-title"><div><h2>Detection and crossing evidence</h2><p id="results-summary" class="hint"></p></div><button type="button" data-close-results>Close</button></div>
+  <fieldset class="result-filters"><legend>Show frames</legend><div class="result-filter-options">
+    <label><input type="radio" name="result-filter" value="all" checked><span>All <small data-filter-count="all">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="detections"><span>Any detection <small data-filter-count="detections">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="basketball"><span>Basketball <small data-filter-count="basketball">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="hoop"><span>Hoop / rim <small data-filter-count="hoop">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="aligned"><span>Aligned pair <small data-filter-count="aligned">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="crossing"><span>Crossing <small data-filter-count="crossing">0</small></span></label>
+    <label><input type="radio" name="result-filter" value="empty"><span>No detections <small data-filter-count="empty">0</small></span></label>
+  </div></fieldset>
+  <p id="results-filter-summary" class="hint result-filter-summary"></p><div id="analysis-results" class="result-grid"></div>
+</dialog>
 <dialog id="analysis-log-dialog"><h2>Analysis log</h2><pre id="analysis-log"></pre><div class="dialog-actions"><button type="button" data-close-log>Close</button></div></dialog>
 {% endblock %}
 {% block scripts %}<script src="/static/analyze.js"></script>{% endblock %}
