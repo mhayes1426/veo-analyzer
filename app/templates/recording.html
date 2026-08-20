@@ -11,11 +11,19 @@
     </div>
     <div class="controls">
       <button id="previous">← Previous</button>
-      <button id="add" class="primary">＋ Add Highlight Here</button>
+      <button id="add" class="primary">＋ Custom Highlight</button>
       <button id="next">Next →</button>
       <button id="fullscreen">⛶ Fullscreen</button>
     </div>
-    <p class="hint"><kbd>H</kbd> add · <kbd>←</kbd>/<kbd>→</kbd> seek 5 seconds · <kbd>[</kbd>/<kbd>]</kbd> previous/next · <kbd>Space</kbd> play/pause</p>
+    <div class="quick-add" aria-label="Quick add highlight">
+      <span>Quick add</span>
+      <button type="button" data-quick-type="basket_attempt" data-quick-outcome="made">Made</button>
+      <button type="button" data-quick-type="basket_attempt" data-quick-outcome="missed">Missed</button>
+      <button type="button" data-quick-type="steal">Steal</button>
+      <button type="button" data-quick-type="block">Block</button>
+      <button type="button" data-quick-type="rebound">Rebound</button>
+    </div>
+    <p class="hint"><kbd>M</kbd> made · <kbd>U</kbd> missed · <kbd>S</kbd> steal · <kbd>B</kbd> block · <kbd>R</kbd> rebound · <kbd>H</kbd> custom · <kbd>←</kbd>/<kbd>→</kbd> seek 5 seconds · <kbd>[</kbd>/<kbd>]</kbd> previous/next · <kbd>Space</kbd> play/pause</p>
   </section>
   <aside><h2>Highlights <span id="count"></span></h2><div id="chapters" class="chapters"></div></aside>
 </div>
