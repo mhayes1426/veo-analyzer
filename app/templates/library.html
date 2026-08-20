@@ -5,26 +5,36 @@
   <div><h1>Game library</h1><p>Games discovered from your read-only media share.</p></div>
   <button id="scan">Scan now</button>
 </section>
-<input id="search" class="search" placeholder="Search games…" aria-label="Search games">
+<div class="library-controls">
+  <input id="search" class="search" placeholder="Search game titles…" aria-label="Search game titles">
+  <fieldset class="library-filters"><legend>Filter games</legend><div class="filter-options">
+    <label><input type="radio" name="game-filter" value="all" checked><span>All games</span></label>
+    <label><input type="radio" name="game-filter" value="highlights"><span>With highlights</span></label>
+    <label><input type="radio" name="game-filter" value="annotated"><span>With annotations</span></label>
+    <label><input type="radio" name="game-filter" value="unannotated"><span>Needs annotation</span></label>
+  </div></fieldset>
+</div>
 <section class="grid" id="games">
 {% for game in recordings %}
-  <a class="card" href="/recordings/{{ game.recording_id }}" data-title="{{ game.title|lower }}">
+  <a class="card" href="/recordings/{{ game.recording_id }}" data-title="{{ game.title }}" data-highlights="{{ game.event_count }}" data-annotated="{{ game.annotated_event_count }}" data-unannotated="{{ game.unannotated_event_count }}">
     <div class="thumbnail"><img src="/api/recordings/{{ game.recording_id }}/thumbnail" alt="" loading="lazy"></div>
     <span class="status {{ game.availability }}">{{ game.availability }}</span>
     <h2>{{ game.title }}</h2>
-    <p>{{ ((game.duration_seconds or 0) / 60)|round|int }} min · {{ game.event_count }} highlights</p>
+    <p>{{ ((game.duration_seconds or 0) / 60)|round|int }} min · {{ game.event_count }} highlights{% if game.event_count %} · {{ game.annotated_event_count }} annotated · {{ game.unannotated_event_count }} to annotate{% endif %}</p>
   </a>
 {% else %}
   <div class="empty"><h2>No games found yet</h2><p>Check the media mapping, then select Scan now.</p></div>
 {% endfor %}
 </section>
+{% if recordings %}<div id="no-results" class="empty no-results" hidden><h2>No matching games</h2><p>Try a different title or filter.</p></div>{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
-const search = document.querySelector('#search');
-search.addEventListener('input', () => document.querySelectorAll('.card').forEach(card => {
-  card.hidden = !card.dataset.title.includes(search.value.toLowerCase());
-}));
+const search=document.querySelector('#search'),cards=[...document.querySelectorAll('.card')],noResults=document.querySelector('#no-results');
+const normalize=value=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+function applyLibraryFilters(){const query=normalize(search.value),filter=document.querySelector('input[name="game-filter"]:checked').value;let visible=0;cards.forEach(card=>{const titleMatch=!query||normalize(card.dataset.title).includes(query),filterMatch=filter==='all'||filter==='highlights'&&Number(card.dataset.highlights)>0||filter==='annotated'&&Number(card.dataset.annotated)>0||filter==='unannotated'&&Number(card.dataset.unannotated)>0;card.hidden=!(titleMatch&&filterMatch);if(!card.hidden)visible++});if(noResults)noResults.hidden=visible>0}
+search.addEventListener('input',applyLibraryFilters);
+document.querySelectorAll('input[name="game-filter"]').forEach(input=>input.addEventListener('change',applyLibraryFilters));
 document.querySelector('#scan').addEventListener('click', async event => {
   event.currentTarget.disabled = true; event.currentTarget.textContent = 'Scanning…';
   await fetch('/api/scan', {method:'POST'}); location.reload();

@@ -546,9 +546,17 @@ def export_yolo_dataset():
 def library(request: Request):
     with db.connect() as connection:
         recordings = connection.execute(
-            """SELECT r.*, COUNT(e.event_id) AS event_count
-               FROM recordings r LEFT JOIN events e ON e.recording_id=r.recording_id
-               GROUP BY r.recording_id ORDER BY r.created_at DESC"""
+            """SELECT r.*,
+                      (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id) AS event_count,
+                      (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id
+                       AND EXISTS (SELECT 1 FROM annotation_frames f
+                                   JOIN annotation_boxes b ON b.frame_id=f.frame_id
+                                   WHERE f.event_id=e.event_id)) AS annotated_event_count,
+                      (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id
+                       AND NOT EXISTS (SELECT 1 FROM annotation_frames f
+                                       JOIN annotation_boxes b ON b.frame_id=f.frame_id
+                                       WHERE f.event_id=e.event_id)) AS unannotated_event_count
+               FROM recordings r ORDER BY r.created_at DESC"""
         ).fetchall()
     return templates.TemplateResponse(request, "library.html", {"recordings": recordings, "version": __version__})
 
