@@ -3,7 +3,7 @@
 {% block head_extra %}<link rel="stylesheet" href="/static/fullscreen.css"><link rel="stylesheet" href="/static/review.css">{% endblock %}
 {% block content %}
 <a href="/" class="back">← Game library</a>
-<section class="watch-head"><div><h1>{{ recording.title }}</h1><p id="clock">00:00:00.000</p></div><div class="watch-actions"><a class="button secondary" href="/api/recordings/{{ recording.recording_id }}/export/json">Export JSON</a><button id="clear-highlights" class="danger" type="button">Clear all highlights</button></div></section>
+<section class="watch-head"><div><h1>{{ recording.title }}</h1><p id="clock">00:00:00.000</p></div><div class="watch-actions">{% if annotation_start_event_id %}<a class="button primary" href="/events/{{ annotation_start_event_id }}/annotate">Annotate highlights{% if annotation_remaining %} ({{ annotation_remaining }} remaining){% endif %}</a>{% endif %}<a class="button secondary" href="/api/recordings/{{ recording.recording_id }}/export/json">Export JSON</a><button id="clear-highlights" class="danger" type="button">Clear all highlights</button></div></section>
 <div class="watch-layout">
   <section>
     <div id="video-shell">

@@ -232,6 +232,38 @@ def dataset_frames() -> list[dict]:
     return [dict(row) | {"boxes": boxes_by_frame.get(row["frame_id"], [])} for row in frames]
 
 
+def annotation_queue(recording_id: str) -> list[dict]:
+    with db.connect() as connection:
+        rows = connection.execute(
+            """SELECT e.*,
+                      (SELECT COUNT(*) FROM annotation_frames f WHERE f.event_id=e.event_id) AS frame_count,
+                      (SELECT COUNT(*) FROM annotation_frames f WHERE f.event_id=e.event_id
+                       AND f.review_status='pending') AS pending_count,
+                      (SELECT COUNT(*) FROM annotation_frames f WHERE f.event_id=e.event_id
+                       AND f.review_status='reviewed') AS reviewed_count,
+                      (SELECT COUNT(*) FROM annotation_frames f WHERE f.event_id=e.event_id
+                       AND f.review_status='skipped') AS skipped_count
+               FROM events e WHERE e.recording_id=? ORDER BY e.event_time_seconds""",
+            (recording_id,),
+        ).fetchall()
+    queue = []
+    for row in rows:
+        item = dict(row)
+        frame_count = item["frame_count"]
+        basket_event = item["event_type"] in {"basket_attempt", "made_basket"}
+        if frame_count and item["skipped_count"] == frame_count:
+            state = "unusable"
+        elif not frame_count or (item["pending_count"] == frame_count and not item["reviewed_count"] and not item["skipped_count"]):
+            state = "not_started"
+        elif not item["pending_count"] and (not basket_event or item["sequence_outcome"] != "uncertain"):
+            state = "complete"
+        else:
+            state = "in_progress"
+        item["annotation_state"] = state
+        queue.append(item)
+    return queue
+
+
 @app.get("/health")
 def health():
     with db.connect() as connection:
@@ -549,13 +581,16 @@ def library(request: Request):
             """SELECT r.*,
                       (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id) AS event_count,
                       (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id
-                       AND EXISTS (SELECT 1 FROM annotation_frames f
-                                   JOIN annotation_boxes b ON b.frame_id=f.frame_id
-                                   WHERE f.event_id=e.event_id)) AS annotated_event_count,
+                       AND EXISTS (SELECT 1 FROM annotation_frames f WHERE f.event_id=e.event_id
+                                   AND f.review_status='reviewed')) AS annotated_event_count,
                       (SELECT COUNT(*) FROM events e WHERE e.recording_id=r.recording_id
-                       AND NOT EXISTS (SELECT 1 FROM annotation_frames f
-                                       JOIN annotation_boxes b ON b.frame_id=f.frame_id
-                                       WHERE f.event_id=e.event_id)) AS unannotated_event_count
+                       AND NOT (EXISTS (SELECT 1 FROM annotation_frames f WHERE f.event_id=e.event_id)
+                                AND NOT EXISTS (SELECT 1 FROM annotation_frames f WHERE f.event_id=e.event_id
+                                                AND f.review_status='pending')
+                                AND (e.event_type NOT IN ('basket_attempt','made_basket')
+                                     OR e.sequence_outcome!='uncertain'
+                                     OR NOT EXISTS (SELECT 1 FROM annotation_frames f WHERE f.event_id=e.event_id
+                                                    AND f.review_status!='skipped')))) AS unannotated_event_count
                FROM recordings r ORDER BY r.created_at DESC"""
         ).fetchall()
     return templates.TemplateResponse(request, "library.html", {"recordings": recordings, "version": __version__})
@@ -574,6 +609,8 @@ def recording_page(request: Request, recording_id: str):
         events = connection.execute(
             "SELECT * FROM events WHERE recording_id=? ORDER BY event_time_seconds", (recording_id,)
         ).fetchall()
+    queue = annotation_queue(recording_id)
+    remaining = [item for item in queue if item["annotation_state"] not in {"complete", "unusable"}]
     return templates.TemplateResponse(
         request,
         "recording.html",
@@ -582,6 +619,8 @@ def recording_page(request: Request, recording_id: str):
             "events_json": json.dumps([dict(row) for row in events]),
             "before": settings.default_before_seconds,
             "after": settings.default_after_seconds,
+            "annotation_remaining": len(remaining),
+            "annotation_start_event_id": (remaining[0] if remaining else queue[0] if queue else {}).get("event_id"),
         },
     )
 
@@ -605,11 +644,22 @@ def annotation_page(request: Request, event_id: str):
     for box in boxes:
         boxes_by_frame[box["frame_id"]].append(dict(box))
     frame_data = [dict(row) | {"boxes": boxes_by_frame[row["frame_id"]]} for row in frames]
+    queue = annotation_queue(recording["recording_id"])
+    queue_index = next(index for index, item in enumerate(queue) if item["event_id"] == event_id)
+    previous_event = queue[(queue_index - 1) % len(queue)] if len(queue) > 1 else None
+    next_event = queue[(queue_index + 1) % len(queue)] if len(queue) > 1 else None
+    next_pending = next(
+        (item for item in queue[queue_index + 1:] + queue[:queue_index]
+         if item["annotation_state"] not in {"complete", "unusable"}),
+        None,
+    )
     return templates.TemplateResponse(
         request,
         "annotate.html",
         {"event": event, "recording": recording, "frames_json": json.dumps(frame_data),
-         "size_presets_json": json.dumps({row["object_class"]: {"width": row["width"], "height": row["height"]} for row in preset_rows})},
+         "size_presets_json": json.dumps({row["object_class"]: {"width": row["width"], "height": row["height"]} for row in preset_rows}),
+         "annotation_queue": queue, "previous_event": previous_event, "next_event": next_event,
+         "next_pending": next_pending},
     )
 
 

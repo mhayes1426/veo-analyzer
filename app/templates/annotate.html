@@ -10,6 +10,31 @@
     <a class="button secondary export-annotations" href="/api/events/{{ event.event_id }}/annotations/export">Export annotations</a>
   </div>
 </section>
+<section class="annotation-queue-panel">
+  <div class="queue-toolbar">
+    <div><h2>Annotation queue</h2><span class="hint">Move between highlights without returning to the game screen.</span></div>
+    <div class="queue-filters" role="group" aria-label="Filter annotation queue">
+      <button type="button" data-queue-filter="remaining" class="active">Needs work</button>
+      <button type="button" data-queue-filter="in_progress">In progress</button>
+      <button type="button" data-queue-filter="complete">Complete</button>
+      <button type="button" data-queue-filter="all">All</button>
+    </div>
+  </div>
+  <div id="annotation-queue" class="annotation-queue">
+    {% for item in annotation_queue %}
+    <a href="/events/{{ item.event_id }}/annotate" data-queue-event data-state="{{ item.annotation_state }}" data-time="{{ item.event_time_seconds }}" class="queue-item {{ item.annotation_state }}{% if item.event_id == event.event_id %} current{% endif %}">
+      <strong>{% if item.event_type == 'basket_attempt' %}{% if item.sequence_outcome == 'made' %}Made basket{% elif item.sequence_outcome == 'missed' %}Missed basket{% else %}Basket attempt{% endif %}{% else %}{{ item.event_type|replace('_', ' ') }}{% endif %}</strong>
+      <span class="queue-state">{{ '%.2f'|format(item.event_time_seconds) }}s · {{ item.annotation_state|replace('_', ' ') }}</span>
+      <small class="queue-counts">{{ item.reviewed_count }} reviewed · {{ item.skipped_count }} skipped · {{ item.pending_count }} pending</small>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="queue-navigation">
+    {% if previous_event %}<a id="previous-highlight" class="button secondary" data-queue-event href="/events/{{ previous_event.event_id }}/annotate">← Previous highlight</a>{% endif %}
+    {% if next_pending %}<a class="button primary" data-queue-event href="/events/{{ next_pending.event_id }}/annotate">Save &amp; next needing work</a>{% endif %}
+    {% if next_event %}<a id="next-highlight" class="button secondary" data-queue-event href="/events/{{ next_event.event_id }}/annotate">Next highlight →</a>{% endif %}
+  </div>
+</section>
 <div class="annotation-layout">
   <section>
     <div id="annotation-stage"><img id="frame-image" alt="Annotation frame"><div id="box-layer"></div></div>
@@ -40,6 +65,9 @@
     <button id="copy-previous">Copy previous frame <kbd>C</kbd></button>
     <button id="propagate-hoop">Fill missing hoop frames <kbd>P</kbd></button>
     <button id="propagate-ball">Fill missing basketball frames <kbd>A</kbd></button>
+    <button id="next-pending-frame">Next pending frame</button>
+    <button id="skip-selected-frames">Skip selected frames</button>
+    <button id="skip-remaining-frames">Skip remaining pending frames</button>
     <button id="clear-all-frames" class="danger">Clear all frames <kbd>X</kbd></button>
     <button id="save-boxes" class="primary">Save frame <kbd>S</kbd></button>
     <p class="hint">Only the selected type is shown while drawing. Use Both to review alignment. Remove a box with its × button or the Delete key; hiding never removes it.</p>
@@ -102,9 +130,18 @@
         <li>A frame that already contains the selected object type is skipped; existing boxes are never replaced or duplicated.</li>
         <li>With no selection, propagation continues to fill all missing frames from the current frame.</li>
       </ul>
+      <h3>Queue and skipping</h3>
+      <ul>
+        <li>Use the queue to move directly between highlights; unsaved changes are saved before switching.</li>
+        <li><strong>Needs work</strong> includes highlights that are not started or still in progress.</li>
+        <li>Mark a usable frame Reviewed even when the ball is intentionally absent.</li>
+        <li>Mark unusable frames Skipped. Skipped frames are excluded from training exports.</li>
+        <li>Use Skip selected frames for a chosen set, or Skip remaining pending frames when the rest of a highlight is unusable.</li>
+        <li>A highlight with every frame skipped is treated as Unusable and no longer appears under Needs work.</li>
+      </ul>
     </aside>
     <div id="guide-backdrop" class="guide-backdrop"></div>
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},recordingId:{{ recording.recording_id|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}
+{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},eventType:{{ event.event_type|tojson }},recordingId:{{ recording.recording_id|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}
