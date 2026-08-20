@@ -37,7 +37,7 @@
 </section>
 <div class="annotation-layout">
   <section>
-    <div id="annotation-stage"><img id="frame-image" alt="Annotation frame"><div id="box-layer"></div></div>
+    <div id="annotation-stage"><img id="frame-image" alt="Annotation frame"><div id="box-layer"></div><div id="prediction-layer" aria-hidden="true"></div></div>
     <div class="frame-controls"><button id="previous-frame">← Previous frame</button><strong id="frame-label"></strong><button id="next-frame">Next frame →</button></div>
     <div class="detail-action"><button id="generate-details">Generate detailed frames here</button><span class="hint">Adds 0.1-second frames around the selected image.</span></div>
     <div class="detail-remove"><button id="remove-detail-group" class="danger hidden">Remove this detailed-frame group</button></div>
@@ -48,6 +48,18 @@
       <span id="frame-selection-summary" class="hint">Select specific frames for controlled box propagation.</span>
     </div>
     <div id="timeline" class="frame-timeline"></div>
+    <section class="model-test-panel">
+      <div class="model-test-head"><div><h2>Test model on this highlight</h2><p class="hint">Compare model predictions with these annotations and the known event time. This never creates another highlight.</p></div><label class="prediction-toggle"><input id="show-model-predictions" type="checkbox" checked> Show predictions</label></div>
+      <div class="model-test-controls">
+        <label>Trained model<select id="model-test-model" {% if not models %}disabled{% endif %}><option value="">Choose a completed model</option>{% for model in models %}<option value="{{ model.job_id }}">{{ model.model_name }} · {{ model.completed_at }}</option>{% endfor %}</select></label>
+        <label>Confidence<input id="model-test-confidence" type="number" min="0.01" max="1" step="0.01" value="0.10"></label>
+        <button id="run-model-test" class="primary" type="button" {% if not model_test_available or not models %}disabled{% endif %}>Test current highlight</button>
+        <button id="next-model-issue" type="button" hidden>Next problem frame →</button>
+      </div>
+      {% if not models %}<p class="bad">Complete a training job before testing a model.</p>{% elif not model_test_available %}<p class="bad">Model testing requires the NVIDIA GPU container with CUDA available.</p>{% endif %}
+      <p id="model-test-status" class="hint">The test automatically uses this highlight’s frame window at 0.1-second intervals.</p>
+      <div id="model-test-summary" class="model-test-summary" hidden></div>
+    </section>
   </section>
   <aside class="tools">
     <div class="tools-title"><h2>Draw boxes</h2><button id="open-guide">Annotation guide</button></div>
@@ -139,9 +151,17 @@
         <li>Use Skip selected frames for a chosen set, or Skip remaining pending frames when the rest of a highlight is unusable.</li>
         <li>A highlight with every frame skipped is treated as Unusable and no longer appears under Needs work.</li>
       </ul>
+      <h3>Test a trained model</h3>
+      <ul>
+        <li>Select a completed model and run the test directly on the current highlight window.</li>
+        <li>Dashed model boxes are predictions; solid boxes are your annotations.</li>
+        <li>Green timeline markers passed the comparison. Red markers contain a missed annotation or extra model detection.</li>
+        <li>The comparison uses box overlap, crossing outcome, and the known highlight time. It never creates another highlight.</li>
+        <li>Use unseen games for trustworthy evaluation; results on training footage can look better than real-world performance.</li>
+      </ul>
     </aside>
     <div id="guide-backdrop" class="guide-backdrop"></div>
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},eventType:{{ event.event_type|tojson }},recordingId:{{ recording.recording_id|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}
+{% block scripts %}<script>window.ANNOTATION={eventId:{{ event.event_id|tojson }},eventType:{{ event.event_type|tojson }},eventTime:{{ event.event_time_seconds|tojson }},sequenceOutcome:{{ event.sequence_outcome|tojson }},recordingId:{{ recording.recording_id|tojson }},duration:{{ (recording.duration_seconds or event.play_until_seconds)|tojson }},frames:{{ frames_json|safe }},sizePresets:{{ size_presets_json|safe }}};</script><script src="/static/annotate.js"></script>{% endblock %}

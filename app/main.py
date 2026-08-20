@@ -640,6 +640,10 @@ def annotation_page(request: Request, event_id: str):
             "SELECT object_class, width, height FROM annotation_size_presets WHERE recording_id=?",
             (recording["recording_id"],),
         ).fetchall()
+        model_rows = connection.execute(
+            """SELECT job_id,model_name,completed_at FROM training_jobs
+               WHERE status='completed' AND model_path IS NOT NULL ORDER BY completed_at DESC"""
+        ).fetchall()
     boxes_by_frame: dict[str, list[dict]] = {row["frame_id"]: [] for row in frames}
     for box in boxes:
         boxes_by_frame[box["frame_id"]].append(dict(box))
@@ -659,7 +663,8 @@ def annotation_page(request: Request, event_id: str):
         {"event": event, "recording": recording, "frames_json": json.dumps(frame_data),
          "size_presets_json": json.dumps({row["object_class"]: {"width": row["width"], "height": row["height"]} for row in preset_rows}),
          "annotation_queue": queue, "previous_event": previous_event, "next_event": next_event,
-         "next_pending": next_pending},
+         "next_pending": next_pending, "models": model_rows,
+         "model_test_available": inference_runtime_available()},
     )
 
 

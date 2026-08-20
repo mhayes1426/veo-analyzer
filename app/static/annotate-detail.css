@@ -90,6 +90,118 @@
   justify-content: flex-end;
 }
 
+#prediction-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.prediction-box {
+  position: absolute;
+  border: 3px dashed #ff5fd1;
+  background: #ff5fd112;
+}
+
+.prediction-box.hoop,
+.prediction-box.rim {
+  border-color: #61e786;
+  background: #61e78612;
+}
+
+.prediction-tag {
+  position: absolute;
+  right: -3px;
+  bottom: -24px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #ff5fd1;
+  color: #07111c;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.prediction-box.hoop .prediction-tag,
+.prediction-box.rim .prediction-tag {
+  background: #61e786;
+}
+
+.model-test-panel {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.model-test-head,
+.model-test-controls,
+.prediction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.model-test-head {
+  justify-content: space-between;
+}
+
+.model-test-head h2,
+.model-test-head p {
+  margin: 0 0 4px;
+}
+
+.model-test-controls {
+  align-items: end;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.model-test-controls label {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.model-test-controls label:nth-child(2) {
+  flex: 0 0 130px;
+}
+
+.model-test-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.model-test-metric {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.model-test-metric strong,
+.model-test-metric span {
+  display: block;
+}
+
+.model-test-metric span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.frame-dot.model-pass {
+  box-shadow: inset 0 -3px #61e786;
+}
+
+.frame-dot.model-issue {
+  border-color: #ff6f7d;
+  color: #ff9da5;
+}
+
 .frame-timeline {
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
 }
@@ -135,6 +247,11 @@
 @media (max-width: 900px) {
   .detail-action {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .model-test-head {
+    align-items: flex-start;
     flex-direction: column;
   }
 }
