@@ -17,6 +17,11 @@
     <div class="detail-action"><button id="generate-details">Generate detailed frames here</button><span class="hint">Adds 0.1-second frames around the selected image.</span></div>
     <div class="detail-remove"><button id="remove-detail-group" class="danger hidden">Remove this detailed-frame group</button></div>
     <div id="review-summary" class="review-summary"></div>
+    <div class="frame-selection-controls">
+      <button id="toggle-frame-selection" type="button">Select frames</button>
+      <button id="clear-frame-selection" type="button" hidden>Clear selection</button>
+      <span id="frame-selection-summary" class="hint">Select specific frames for controlled box propagation.</span>
+    </div>
     <div id="timeline" class="frame-timeline"></div>
   </section>
   <aside class="tools">
@@ -88,6 +93,14 @@
         <li>Purple timeline markers identify 0.1-second detailed frames.</li>
         <li>Use a detailed frame’s removal button if the group was generated around the wrong moment.</li>
         <li>Removing a detailed group never removes the original broad frames.</li>
+      </ul>
+      <h3>Select frames for propagation</h3>
+      <ul>
+        <li>Choose <strong>Select frames</strong>, then click the timeline frames you want to include.</li>
+        <li>The first selected frame is the source. Draw or confirm its hoop and basketball boxes first.</li>
+        <li>Fill missing hoop or basketball copies from the source only into the selected frames.</li>
+        <li>A frame that already contains the selected object type is skipped; existing boxes are never replaced or duplicated.</li>
+        <li>With no selection, propagation continues to fill all missing frames from the current frame.</li>
       </ul>
     </aside>
     <div id="guide-backdrop" class="guide-backdrop"></div>

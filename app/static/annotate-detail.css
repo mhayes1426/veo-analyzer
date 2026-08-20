@@ -14,6 +14,30 @@
   box-shadow: inset 0 -3px #8f7cff;
 }
 
+.frame-selection-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.frame-selection-controls button {
+  padding: 7px 11px;
+}
+
+.frame-selection-controls button.active,
+.frame-dot.selected-for-fill {
+  border-color: #8f7cff;
+  color: #c5bcff;
+}
+
+.frame-dot.fill-source {
+  outline: 2px solid #ffbd4a;
+  outline-offset: 2px;
+}
+
 .detail-remove {
   display: flex;
   justify-content: center;
