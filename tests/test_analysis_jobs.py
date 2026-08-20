@@ -1,6 +1,6 @@
 import uuid
 
-from app.analysis_jobs import (_create_candidate_events, _detections, frame_explanation, frame_times,
+from app.analysis_jobs import (_create_candidate_events, _detections, frame_explanation, frame_noise_reason, frame_times,
                                made_basket_candidates, rim_observations)
 from app.config import Settings
 from app.db import Database
@@ -78,8 +78,19 @@ def test_calibration_frame_explains_above_rim_state():
 
 
 def test_crossings_within_three_seconds_are_deduplicated():
-    frames = trajectory(.45, [.37, .46], 10) + trajectory(.45, [.37, .46], 11)
+    frames = trajectory(.45, [.37, .39, .43, .46], 10) + trajectory(.45, [.37, .39, .43, .46], 11)
     assert len(made_basket_candidates(frames, 1.0)) == 1
+
+
+def test_two_frame_jump_is_not_enough_for_a_crossing():
+    assert made_basket_candidates(trajectory(.45, [.37, .46]), 1.0) == []
+
+
+def test_implausible_basketball_count_marks_frame_noisy():
+    detections = [detection("basketball", .1, .1, .2, .2) for _ in range(5)]
+    assert frame_noise_reason(detections) == "Implausible frame: 5 basketball detections"
+    explanation = frame_explanation({"time_seconds": 10, "detections": detections})
+    assert explanation["state"] == "noisy_frame"
 
 
 def test_reanalysis_replaces_only_unreviewed_lineage_candidates(roots):

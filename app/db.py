@@ -121,6 +121,8 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     processed_frames INTEGER NOT NULL DEFAULT 0,
     detection_count INTEGER NOT NULL DEFAULT 0,
     candidate_count INTEGER NOT NULL DEFAULT 0,
+    noisy_frame_count INTEGER NOT NULL DEFAULT 0,
+    quality_status TEXT NOT NULL DEFAULT 'pending' CHECK(quality_status IN ('pending','reliable','unreliable')),
     cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK(cancel_requested IN (0,1)),
     output_dir TEXT NOT NULL,
     error_message TEXT,
@@ -194,6 +196,10 @@ class Database:
             )
         if "candidate_count" not in analysis_columns:
             connection.execute("ALTER TABLE analysis_jobs ADD COLUMN candidate_count INTEGER NOT NULL DEFAULT 0")
+        if "noisy_frame_count" not in analysis_columns:
+            connection.execute("ALTER TABLE analysis_jobs ADD COLUMN noisy_frame_count INTEGER NOT NULL DEFAULT 0")
+        if "quality_status" not in analysis_columns:
+            connection.execute("ALTER TABLE analysis_jobs ADD COLUMN quality_status TEXT NOT NULL DEFAULT 'pending'")
         if "cancel_requested" not in analysis_columns:
             connection.execute("ALTER TABLE analysis_jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0")
         result_columns = {row[1] for row in connection.execute("PRAGMA table_info(analysis_results)")}

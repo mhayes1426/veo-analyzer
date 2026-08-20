@@ -33,7 +33,7 @@
     <article class="job-card" data-job-id="{{ job.job_id }}" data-status="{{ job.status }}">
       <div><strong>{{ job.model_name }} · {{ job.epochs }} epochs</strong><span>{{ job.frame_count }} frames · {{ job.image_size }}px · batch {{ job.batch_size }}</span></div>
       <div class="job-progress"><span>{{ job.status|capitalize }} · epoch {{ job.current_epoch }}/{{ job.epochs }}</span><progress max="100" value="{{ job.progress_percent }}"></progress></div>
-      <div class="job-actions">{% if job.model_available %}<a class="button" href="/api/training/jobs/{{ job.job_id }}/model">Download model</a>{% endif %}<button type="button" data-log>View log</button></div>
+      <div class="job-actions">{% if job.model_available %}<a class="button" href="/api/training/jobs/{{ job.job_id }}/model">Download model</a>{% endif %}<button type="button" data-log>View log</button>{% if job.status not in ('queued','preparing','running') %}<button class="danger" type="button" data-delete-model>{{ 'Delete model' if job.model_available else 'Delete job' }}</button>{% endif %}</div>
       {% if job.error_message %}<p class="bad job-error">{{ job.error_message }}</p>{% endif %}
       {% if job.metrics %}<p class="job-metrics">{% for name, value in job.metrics.items() %}{{ name }} {{ '%.4f'|format(value) }}{% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
     </article>

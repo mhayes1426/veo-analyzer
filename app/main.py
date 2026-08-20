@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
 import subprocess
 import uuid
 import zipfile
@@ -174,7 +175,8 @@ def analysis_job_dict(row) -> dict:
     result = {key: row[key] for key in (
         "job_id", "recording_id", "training_job_id", "status", "mode", "start_seconds", "end_seconds",
         "sample_interval_seconds", "confidence_threshold", "progress_percent", "processed_frames",
-        "crossing_window_seconds", "detection_count", "candidate_count", "cancel_requested", "error_message", "created_at",
+        "crossing_window_seconds", "detection_count", "candidate_count", "noisy_frame_count", "quality_status",
+        "cancel_requested", "error_message", "created_at",
         "started_at", "completed_at", "updated_at",
     )}
     result["recording_title"] = row["recording_title"] if "recording_title" in row.keys() else None
@@ -383,6 +385,27 @@ def training_job_log(job_id: str):
     return {"log": path.read_text(errors="replace")[-20000:] if path.is_file() else "Training has not produced output yet."}
 
 
+@app.delete("/api/training/jobs/{job_id}")
+def delete_training_job(job_id: str):
+    with db.transaction() as connection:
+        row = connection.execute("SELECT status FROM training_jobs WHERE job_id=?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Training job not found")
+        if row["status"] in {"queued", "preparing", "running"}:
+            raise HTTPException(409, "An active training job cannot be deleted")
+        references = connection.execute(
+            "SELECT COUNT(*) FROM analysis_jobs WHERE training_job_id=?", (job_id,),
+        ).fetchone()[0]
+        if references:
+            raise HTTPException(409, f"Remove the {references} analysis job(s) using this model first")
+        connection.execute("DELETE FROM training_jobs WHERE job_id=?", (job_id,))
+    root = (settings.config_root / "training" / "jobs").resolve()
+    job_dir = (root / job_id).resolve()
+    if job_dir.parent == root:
+        shutil.rmtree(job_dir, ignore_errors=True)
+    return {"job_id": job_id, "deleted": True}
+
+
 @app.get("/analyze", response_class=HTMLResponse)
 def analysis_page(request: Request):
     with db.connect() as connection:
@@ -515,6 +538,26 @@ def cancel_analysis_job(job_id: str):
             "UPDATE analysis_jobs SET cancel_requested=1,updated_at=CURRENT_TIMESTAMP WHERE job_id=?", (job_id,),
         )
     return {"job_id": job_id, "stop_requested": True}
+
+
+@app.delete("/api/analysis/jobs/{job_id}")
+def delete_analysis_job(job_id: str):
+    with db.transaction() as connection:
+        row = connection.execute("SELECT status FROM analysis_jobs WHERE job_id=?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Analysis job not found")
+        if row["status"] in {"queued", "running"}:
+            raise HTTPException(409, "Stop this analysis job before deleting it")
+        candidates = connection.execute(
+            """DELETE FROM events WHERE analysis_job_id=? AND source='model'
+               AND review_status='candidate'""", (job_id,),
+        ).rowcount
+        connection.execute("DELETE FROM analysis_jobs WHERE job_id=?", (job_id,))
+    root = (settings.config_root / "analysis" / "jobs").resolve()
+    job_dir = (root / job_id).resolve()
+    if job_dir.parent == root:
+        shutil.rmtree(job_dir, ignore_errors=True)
+    return {"job_id": job_id, "deleted": True, "candidate_highlights_deleted": candidates}
 
 
 @app.get("/api/analysis/results/{result_id}/image")

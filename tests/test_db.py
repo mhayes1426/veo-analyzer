@@ -19,7 +19,8 @@ def test_schema_initializes(roots):
     assert "sequence_outcome" in event_columns
     assert "analysis_job_id" in event_columns
     assert {"review_status", "detail_group_id"} <= frame_columns
-    assert {"mode", "crossing_window_seconds", "candidate_count", "cancel_requested"} <= analysis_columns
+    assert {"mode", "crossing_window_seconds", "candidate_count", "noisy_frame_count", "quality_status",
+            "cancel_requested"} <= analysis_columns
     assert {"explanation_json", "candidate_event_id"} <= result_columns
 
 

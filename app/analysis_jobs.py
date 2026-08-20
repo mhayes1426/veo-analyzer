@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -107,9 +108,23 @@ def _center(box: dict) -> tuple[float, float]:
     return (box["x1"] + box["x2"]) / 2, (box["y1"] + box["y2"]) / 2
 
 
+def frame_noise_reason(detections: list[dict]) -> str | None:
+    balls = sum(box["class"] == "basketball" for box in detections)
+    hoops = sum(box["class"] in {"hoop", "rim"} for box in detections)
+    if balls > 4:
+        return f"Implausible frame: {balls} basketball detections"
+    if hoops > 4:
+        return f"Implausible frame: {hoops} hoop detections"
+    if len(detections) > 12:
+        return f"Implausible frame: {len(detections)} total detections"
+    return None
+
+
 def rim_observations(frames: list[dict]) -> list[dict]:
     observations = []
     for frame in frames:
+        if frame.get("eligible_for_crossing") is False:
+            continue
         hoops = [box for box in frame["detections"] if box["class"] in {"hoop", "rim"}]
         balls = [box for box in frame["detections"] if box["class"] == "basketball"]
         for ball in balls:
@@ -127,12 +142,22 @@ def rim_observations(frames: list[dict]) -> list[dict]:
                 observations.append({
                     "time_seconds": frame["time_seconds"], "dx_rim_widths": round(dx, 4),
                     "dy_rim_heights": round(dy, 4), "hoop_x": hoop_x, "hoop_y": hoop_y,
+                    "ball_x": ball_x, "ball_y": ball_y,
                     "ball_confidence": ball["confidence"], "hoop_confidence": hoop["confidence"],
                 })
-    return observations
+    best_by_time = {}
+    for observation in observations:
+        score = abs(observation["dx_rim_widths"]) + abs(observation["dy_rim_heights"]) * .08
+        current = best_by_time.get(observation["time_seconds"])
+        if current is None or score < current[0]:
+            best_by_time[observation["time_seconds"]] = (score, observation)
+    return [best_by_time[time][1] for time in sorted(best_by_time)]
 
 
 def frame_explanation(frame: dict) -> dict:
+    noise_reason = frame_noise_reason(frame["detections"])
+    if noise_reason:
+        return {"is_candidate": False, "state": "noisy_frame", "reason": noise_reason}
     observations = rim_observations([frame])
     if not observations:
         return {"is_candidate": False, "state": "no_aligned_pair",
@@ -165,6 +190,17 @@ def made_basket_candidates(frames: list[dict], crossing_window_seconds: float) -
             if below["dy_rim_heights"] < .35 or abs(below["dx_rim_widths"]) > .8:
                 continue
             if abs(below["hoop_x"] - above["hoop_x"]) > .25 or abs(below["hoop_y"] - above["hoop_y"]) > .2:
+                continue
+            trajectory = [item for item in observations[index:] if item["time_seconds"] <= below["time_seconds"]]
+            if len(trajectory) < 3:
+                continue
+            if not any(-.25 < item["dy_rim_heights"] < .35 for item in trajectory[1:-1]):
+                continue
+            if max(item["hoop_x"] for item in trajectory) - min(item["hoop_x"] for item in trajectory) > .12:
+                continue
+            if max(item["hoop_y"] for item in trajectory) - min(item["hoop_y"] for item in trajectory) > .10:
+                continue
+            if any(later["ball_y"] < earlier["ball_y"] - .015 for earlier, later in zip(trajectory, trajectory[1:])):
                 continue
             span = below["dy_rim_heights"] - above["dy_rim_heights"]
             fraction = min(1.0, max(0.0, -above["dy_rim_heights"] / span))
@@ -266,6 +302,7 @@ def run_job(job_id: str) -> None:
         expected_frames = len(frame_times(job["start_seconds"], job["end_seconds"], job["sample_interval_seconds"]))
         _update(db, job_id, status="running", started_at=_now())
         total_detections = 0
+        noisy_frames = 0
         processed = 0
         frame_records = []
         result_records = []
@@ -281,11 +318,14 @@ def run_job(job_id: str) -> None:
                 raise RuntimeError(f"No video frames could be extracted near {cursor:.1f} seconds")
             predictions = model.predict(
                 source=[str(raw) for raw, _ in extracted], conf=job["confidence_threshold"],
-                device="0", batch=1, half=True, verbose=False, stream=True,
+                device="0", batch=1, half=True, iou=.35, max_det=20, verbose=False, stream=True,
             )
             for (raw, time_seconds), result in zip(extracted, predictions):
                 detected = _detections(result)
-                frame_record = {"time_seconds": time_seconds, "detections": detected}
+                noise_reason = frame_noise_reason(detected)
+                noisy_frames += int(noise_reason is not None)
+                frame_record = {"time_seconds": time_seconds, "detections": detected,
+                                "eligible_for_crossing": noise_reason is None}
                 frame_records.append(frame_record)
                 total_detections += len(detected)
                 near_rim = bool(rim_observations([frame_record]))
@@ -308,6 +348,7 @@ def run_job(job_id: str) -> None:
                         raise AnalysisCancelled("Stopped by user")
                     _update(
                         db, job_id, processed_frames=processed, detection_count=total_detections,
+                        noisy_frame_count=noisy_frames,
                         progress_percent=min(99, round(processed / max(1, expected_frames) * 100, 2)),
                     )
             shutil.rmtree(chunk_dir, ignore_errors=True)
@@ -317,10 +358,13 @@ def run_job(job_id: str) -> None:
         if _cancelled(db, job_id):
             raise AnalysisCancelled("Stopped by user")
         candidates = made_basket_candidates(frame_records, float(job["crossing_window_seconds"]))
-        created = _create_candidate_events(db, settings, job, candidates) if job["mode"] == "full_game" else []
+        unreliable = noisy_frames >= max(3, math.ceil(processed * .10))
+        quality_status = "unreliable" if unreliable else "reliable"
+        safe_candidates = [] if unreliable else candidates
+        created = _create_candidate_events(db, settings, job, safe_candidates) if job["mode"] == "full_game" else []
         created_by_time = {candidate["event_time_seconds"]: event_id for event_id, candidate in created}
         with db.transaction() as connection:
-            for candidate in candidates:
+            for candidate in safe_candidates:
                 if not result_records:
                     continue
                 evidence = min(result_records, key=lambda item: abs(item["time_seconds"] - candidate["below"]["time_seconds"]))
@@ -330,7 +374,9 @@ def run_job(job_id: str) -> None:
                 )
         _update(
             db, job_id, status="completed", progress_percent=100, processed_frames=processed,
-            detection_count=total_detections, candidate_count=len(created) if job["mode"] == "full_game" else len(candidates),
+            detection_count=total_detections,
+            candidate_count=len(created) if job["mode"] == "full_game" else len(safe_candidates),
+            noisy_frame_count=noisy_frames, quality_status=quality_status,
             completed_at=_now(),
         )
     except AnalysisCancelled as exc:
