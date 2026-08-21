@@ -13,11 +13,14 @@
 <section class="annotation-queue-panel">
   <div class="queue-toolbar">
     <div><h2>Annotation queue</h2><span class="hint">Move between highlights without returning to the game screen.</span></div>
-    <div class="queue-filters" role="group" aria-label="Filter annotation queue">
-      <button type="button" data-queue-filter="remaining" class="active">Needs work</button>
-      <button type="button" data-queue-filter="in_progress">In progress</button>
-      <button type="button" data-queue-filter="complete">Complete</button>
-      <button type="button" data-queue-filter="all">All</button>
+    <div class="queue-toolbar-actions">
+      <div class="queue-filters" role="group" aria-label="Filter annotation queue">
+        <button type="button" data-queue-filter="remaining" class="active">Needs work</button>
+        <button type="button" data-queue-filter="in_progress">In progress</button>
+        <button type="button" data-queue-filter="complete">Complete</button>
+        <button type="button" data-queue-filter="all">All</button>
+      </div>
+      <button id="remove-filtered-highlights" class="danger" type="button">Remove shown <span id="remove-filtered-count"></span></button>
     </div>
   </div>
   <div id="annotation-queue" class="annotation-queue">

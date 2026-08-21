@@ -126,6 +126,10 @@ class AnnotationSizeInput(BaseModel):
     height: float = Field(gt=0, le=1)
 
 
+class BulkEventDeleteInput(BaseModel):
+    event_ids: list[str] = Field(min_length=1, max_length=1000)
+
+
 class TrainingJobInput(BaseModel):
     model_name: str = Field(default="yolo11n.pt", pattern=r"^yolo11(n|s|m)\.pt$")
     epochs: int = Field(default=50, ge=1, le=500)
@@ -1009,6 +1013,27 @@ def delete_recording_events(recording_id: str):
         ).fetchone()[0]
         connection.execute("DELETE FROM events WHERE recording_id=?", (recording_id,))
     return {"recording_id": recording_id, "deleted_count": count}
+
+
+@app.post("/api/recordings/{recording_id}/events/bulk-delete")
+def bulk_delete_recording_events(recording_id: str, payload: BulkEventDeleteInput):
+    get_recording(recording_id)
+    requested = set(payload.event_ids)
+    queue = {item["event_id"]: item for item in annotation_queue(recording_id)}
+    unknown = requested - queue.keys()
+    if unknown:
+        raise HTTPException(404, "One or more highlights were not found in this game")
+    protected = {event_id for event_id in requested if queue[event_id]["annotation_state"] == "complete"}
+    removable = sorted(requested - protected)
+    if removable:
+        placeholders = ",".join("?" for _ in removable)
+        with db.transaction() as connection:
+            connection.execute(
+                f"DELETE FROM events WHERE recording_id=? AND event_id IN ({placeholders})",
+                (recording_id, *removable),
+            )
+    return {"recording_id": recording_id, "deleted_count": len(removable),
+            "protected_count": len(protected)}
 
 
 @app.get("/api/recordings/{recording_id}/export/json")

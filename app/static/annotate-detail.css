@@ -28,10 +28,16 @@
 }
 
 .queue-filters,
+.queue-toolbar-actions,
 .queue-navigation {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.queue-toolbar-actions {
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .queue-filters button {
